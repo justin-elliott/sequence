@@ -29,9 +29,13 @@
 
 namespace jell::detail {
 
+/// @brief Storage for a sequence.
+/// @tparam T The type of elements stored in the sequence.
+/// @tparam traits Traits defining the sequence.
 template <typename T, sequence_traits::traits auto traits>
 class storage;
 
+/// Storage for a zero-length inplace sequence.
 template <typename T, sequence_traits::traits auto traits>
     requires (!traits.dynamic) && (traits.capacity == 0)
 class storage<T, traits>
@@ -46,6 +50,7 @@ public:
     static constexpr T*        data()                noexcept { return nullptr; }
 };
 
+/// Storage for an inplace sequence.
 template <typename T, sequence_traits::traits auto traits>
     requires (!traits.dynamic) && (traits.capacity != 0)
 class storage<T, traits>
@@ -53,7 +58,7 @@ class storage<T, traits>
 public:
     using size_type = typename decltype(traits)::size_type;
 
-    static constexpr size_type capacity()            noexcept { return static_cast<size_type>(traits.capacity); }
+    static constexpr size_type capacity()            noexcept { return traits.capacity; }
     static constexpr void      capacity(size_type)   noexcept {}
     constexpr size_type        size()          const noexcept { return size_; }
     constexpr void             size(size_type n)     noexcept { size_ = n; }

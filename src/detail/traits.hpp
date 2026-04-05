@@ -30,24 +30,25 @@
 
 namespace jell::detail::sequence_traits {
 
-// The layout of elements in the sequence.
+/// Layout of elements in a sequence.
 enum class location : unsigned char
 {
-    front,  // Store elements from front-to-back (vector).
-    middle, // Store elements from the middle out (deque).
-    back,   // Store elements from back-to-front (stack).
+    front,  ///< Store elements from front-to-back (vector).
+    middle, ///< Store elements from the middle out (deque).
+    back,   ///< Store elements from back-to-front (stack).
 };
 
-// The sequence growth rate.
+/// Growth rate of a sequence.
 enum class growth : unsigned char
 {
-    exponential,            // Exponential growth.
-    linear,                 // Linear growth.
-    vector = exponential,   // Vector-equivalent growth.
+    exponential,            ///< Exponential growth.
+    linear,                 ///< Linear growth.
+    vector = exponential,   ///< Vector-equivalent growth.
 };
 
+/// General traits defining a sequence.
 template <typename Traits>
-concept dynamic_traits = requires(Traits traits)
+concept general_traits = requires(Traits traits)
 {
     typename Traits::size_type;
     {traits.dynamic} -> std::convertible_to<bool>;
@@ -59,6 +60,7 @@ concept dynamic_traits = requires(Traits traits)
     {traits.factor} -> std::convertible_to<float>;
 };
 
+/// Subset of traits defining an inplace sequence.
 template <typename Traits>
 concept inplace_traits = requires(Traits traits)
 {
@@ -68,31 +70,36 @@ concept inplace_traits = requires(Traits traits)
     {traits.location} -> std::convertible_to<location>;
 };
 
+/// Traits defining a sequence.
 template <typename Traits>
-concept traits = dynamic_traits<Traits> || inplace_traits<Traits>;
+concept traits = general_traits<Traits> || inplace_traits<Traits>;
 
+/// General traits defining a sequence.
+/// @tparam Size The type of the sequence's size member.
 template <std::unsigned_integral Size = std::size_t>
 struct traits_t
 {
-    using size_type = std::type_identity_t<Size>; // The type of the size member.
+    using size_type = std::type_identity_t<Size>; //< The type of the size member.
 
-    bool        dynamic  {true};                // True if storage can be dynamically allocated.
-    bool        variable {true};                // True if capacity can grow.
-    size_type   capacity {0};                   // The size of the fixed capacity (or the SBO).
-    location    location {location::front};     // The layout of elements.
-    growth      growth   {growth::exponential}; // The sequence growth rate, combined with increment or factor.
-    std::size_t increment{0};                   // The linear growth in elements (> 0).
-    float       factor   {1.5f};                // The exponential growth factor (> 1.0).
+    bool        dynamic  {true};                //< True if storage can be dynamically allocated.
+    bool        variable {true};                //< True if capacity can grow.
+    size_type   capacity {0};                   //< The size of the fixed capacity (or the SBO).
+    location    location {location::front};     //< The layout of elements.
+    growth      growth   {growth::exponential}; //< The sequence growth rate, combined with increment or factor.
+    std::size_t increment{0};                   //< The linear growth in elements (> 0).
+    float       factor   {1.5f};                //< The exponential growth factor (> 1.0).
 };
 
+/// Subset of traits defining an inplace sequence.
+/// @tparam Size The type of the sequence's size member.
 template <std::unsigned_integral Size = std::size_t>
 struct inplace_t
 {
-    using size_type = std::type_identity_t<Size>;  // The type of the size member.
+    using size_type = std::type_identity_t<Size>;  //< The type of the size member.
 
-    static const bool   dynamic {false};           // Inplace storage.
-    size_type           capacity{0};               // The size of the fixed capacity.
-    location            location{location::front}; // The layout of elements.
+    static const bool   dynamic {false};           //< Inplace storage.
+    size_type           capacity{0};               //< The size of the fixed capacity.
+    location            location{location::front}; //< The layout of elements.
 };
 
 } // namespace jell::detail::sequence_traits
