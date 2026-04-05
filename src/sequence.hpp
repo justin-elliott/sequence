@@ -39,13 +39,6 @@ public:
     constexpr size_type size()     const noexcept { return storage_.size(); }
 
 private:
-    static consteval bool capacity_bounded() noexcept
-    {
-        return (traits.capacity <= std::numeric_limits<size_type>::max());
-    }
-
-    static_assert(capacity_bounded(), "Capacity exceeds the bounds of size_type");
-
     [[no_unique_address]] detail::storage<T, traits> storage_;
 };
 

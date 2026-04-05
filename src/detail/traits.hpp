@@ -26,6 +26,7 @@
 
 #include <concepts>
 #include <cstddef>
+#include <type_traits>
 
 namespace jell::detail::sequence_traits {
 
@@ -73,11 +74,11 @@ concept traits = dynamic_traits<Traits> || inplace_traits<Traits>;
 template <std::unsigned_integral Size = std::size_t>
 struct traits_t
 {
-    using size_type = Size;                     // The type of the size member.
+    using size_type = std::type_identity_t<Size>; // The type of the size member.
 
     bool        dynamic  {true};                // True if storage can be dynamically allocated.
     bool        variable {true};                // True if capacity can grow.
-    std::size_t capacity {0};                   // The size of the fixed capacity (or the SBO).
+    size_type   capacity {0};                   // The size of the fixed capacity (or the SBO).
     location    location {location::front};     // The layout of elements.
     growth      growth   {growth::exponential}; // The sequence growth rate, combined with increment or factor.
     std::size_t increment{0};                   // The linear growth in elements (> 0).
@@ -87,10 +88,10 @@ struct traits_t
 template <std::unsigned_integral Size = std::size_t>
 struct inplace_t
 {
-    using size_type = Size; // The type of the size member.
+    using size_type = std::type_identity_t<Size>;  // The type of the size member.
 
     static const bool   dynamic {false};           // Inplace storage.
-    std::size_t         capacity{0};               // The size of the fixed capacity.
+    size_type           capacity{0};               // The size of the fixed capacity.
     location            location{location::front}; // The layout of elements.
 };
 
