@@ -30,16 +30,17 @@ namespace jell {
 namespace sequence_traits = detail::sequence_traits;
 
 template <typename T, sequence_traits::traits auto traits = sequence_traits::traits_t{}>
-class sequence
+class sequence : private detail::storage<T, traits>
 {
-public:
-    using size_type = decltype(traits)::size_type;
-
-    constexpr size_type capacity() const noexcept { return storage_.capacity(); }
-    constexpr size_type size()     const noexcept { return storage_.size(); }
-
 private:
-    [[no_unique_address]] detail::storage<T, traits> storage_;
+    using storage_t = detail::storage<T, traits>;
+
+public:
+    using size_type = storage_t::size_type;
+
+    using storage_t::capacity;
+    using storage_t::size;
+    using storage_t::data;
 };
 
 } // namespace jell
