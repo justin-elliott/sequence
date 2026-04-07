@@ -23,11 +23,24 @@
 #include "sequence.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <ostream>
 #include <ranges>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+
+namespace jell {
+
+template <typename T, sequence_traits::traits auto Traits>
+std::ostream& operator<<(std::ostream& os, const sequence<T, Traits>& seq)
+{
+    os << "sequence[" << seq.size() << "]{";
+    std::copy(seq.cbegin(), seq.cend(), std::ostream_iterator<T>(os, ", "));
+    return os << '}';
+}
+
+} // namespace jell
 
 namespace {
 
@@ -57,11 +70,10 @@ protected:
     }
 };
 
-class MoveOnly
+struct MoveOnly
 {
-public:
     constexpr MoveOnly() = delete;
-    constexpr explicit MoveOnly(std::size_t value) : value_{value} {}
+    constexpr explicit MoveOnly(std::size_t value) : value{static_cast<std::ptrdiff_t>(value)} {}
 
     constexpr MoveOnly(const MoveOnly&) = delete;
     constexpr MoveOnly& operator=(const MoveOnly&) = delete;
@@ -69,13 +81,17 @@ public:
     constexpr MoveOnly(MoveOnly&&) = default;
     constexpr MoveOnly& operator=(MoveOnly&&) = default;
 
-    constexpr ~MoveOnly() = default;
+    constexpr ~MoveOnly() { value = -1; }
 
     constexpr friend bool operator==(const MoveOnly&, const MoveOnly&) = default;
 
-private:
-    std::size_t value_{0};
+    std::ptrdiff_t value{-1};
 };
+
+std::ostream& operator<<(std::ostream& os, const MoveOnly& mo)
+{
+    return os << "MoveOnly{" << mo.value << '}';
+}
 
 const std::size_t default_size{32};
 
@@ -93,7 +109,7 @@ TYPED_TEST_SUITE(SequenceTest, sequence_types);
 TYPED_TEST(SequenceTest, can_construct)
 {
     TypeParam seq;
-    EXPECT_EQ(seq.size(), 0);
+    EXPECT_EQ(seq.size(), 0) << seq;
 }
 
 TYPED_TEST(SequenceTest, can_unchecked_emplace_front)
@@ -107,7 +123,7 @@ TYPED_TEST(SequenceTest, can_unchecked_emplace_front)
     for (auto [moveable_value, expected_value] : std::views::zip(moveable_values, expected_values)) {
         EXPECT_EQ(seq.unchecked_emplace_front(std::move(moveable_value)), expected_value);
     }
-    EXPECT_TRUE(std::ranges::equal(seq, expected_values | std::views::reverse));
+    EXPECT_TRUE(std::ranges::equal(seq, expected_values | std::views::reverse)) << seq;
 }
 
 TYPED_TEST(SequenceTest, can_unchecked_emplace_back)
@@ -121,7 +137,7 @@ TYPED_TEST(SequenceTest, can_unchecked_emplace_back)
     for (auto [moveable_value, expected_value] : std::views::zip(moveable_values, expected_values)) {
         EXPECT_EQ(seq.unchecked_emplace_back(std::move(moveable_value)), expected_value);
     }
-    EXPECT_TRUE(std::ranges::equal(seq, expected_values));
+    EXPECT_TRUE(std::ranges::equal(seq, expected_values)) << seq;
 }
 
 } // namespace

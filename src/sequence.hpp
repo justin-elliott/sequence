@@ -59,6 +59,7 @@ public:
     static constexpr const traits_type& traits() noexcept { return traits_; }
 
     constexpr size_type       capacity() const { return storage_.capacity(); }
+    constexpr bool            empty()    const { return storage_.last() == storage_.first(); }
     constexpr size_type       size()     const { return storage_.last() - storage_.first(); }
     constexpr pointer         data()           { return data_begin(); }
     constexpr const_pointer   data()     const { return data_begin(); }
@@ -80,7 +81,7 @@ public:
     {
         if constexpr (sequence_traits::is_middle<Traits>) {
             if (storage_.first() == 0) {
-                detached_range detached{std::next(data_end(), (capacity() - size() + 1) / 2)};
+                detached_range detached{data_at(capacity() - (capacity() - size()) / 2)};
                 while (data_begin() != data_end()) {
                     detached.move_front(std::move(back()));
                     pop_back();
@@ -92,13 +93,17 @@ public:
             ::new(std::prev(data_begin())) value_type(std::forward<Args>(args)...);
             storage_.first(storage_.first() - 1);
         } else {
-            detached_range detached{std::next(data_end())};
-            while (data_begin() != data_end()) {
-                detached.move_front(std::move(back()));
-                pop_back();
+            if (empty()) {
+                ::new(data_begin()) value_type(std::forward<Args>(args)...);
+                storage_.last(storage_.last() + 1);
+            } else {
+                value_type tmp{std::forward<Args>(args)...};
+                const auto to{data_end()};
+                ::new(to) value_type(std::move(*std::prev(to)));
+                storage_.last(storage_.last() + 1);
+                std::move_backward(data_begin(), std::prev(to), to);
+                *data_begin() = std::move(tmp);
             }
-            ::new(data_begin()) value_type(std::forward<Args>(args)...);
-            detached.attach_last(storage_);
         }
         return front();
     }
@@ -108,7 +113,7 @@ public:
     {
         if constexpr (sequence_traits::is_middle<Traits>) {
             if (storage_.last() == capacity()) {
-                detached_range detached{std::prev(data_begin(), (capacity() - size()) / 2)};
+                detached_range detached{data_at((capacity() - size()) / 2)};
                 while (data_begin() != data_end()) {
                     detached.move_back(std::move(front()));
                     pop_front();
@@ -120,13 +125,17 @@ public:
             ::new(data_end()) value_type(std::forward<Args>(args)...);
             storage_.last(storage_.last() + 1);
         } else if constexpr (sequence_traits::is_back<Traits>) {
-            detached_range detached{std::prev(data_begin())};
-            while (data_begin() != data_end()) {
-                detached.move_back(std::move(front()));
-                pop_front();
+            if (empty()) {
+                ::new(std::prev(data_end())) value_type(std::forward<Args>(args)...);
+                storage_.first(storage_.first() - 1);
+            } else {
+                value_type tmp{std::forward<Args>(args)...};
+                const auto from{data_begin()};
+                ::new(std::prev(from)) value_type(std::move(*from));
+                storage_.first(storage_.first() - 1);
+                std::move(std::next(from), data_end(), from);
+                *std::prev(data_end()) = std::move(tmp);
             }
-            ::new(std::prev(data_end())) value_type(std::forward<Args>(args)...);
-            detached.attach_first(storage_);
         }
         return back();
     }
@@ -159,10 +168,12 @@ private:
     using detached_range = detail::detached_range<T, Traits>;
     using storage_type = detail::storage<T, Traits>;
 
-    constexpr pointer       data_begin()       { return storage_.data(storage_.first()); }
-    constexpr const_pointer data_begin() const { return storage_.data(storage_.first()); }
-    constexpr pointer       data_end()         { return storage_.data(storage_.last()); }
-    constexpr const_pointer data_end()   const { return storage_.data(storage_.last()); }
+    constexpr pointer       data_begin()               { return storage_.data(storage_.first()); }
+    constexpr const_pointer data_begin()         const { return storage_.data(storage_.first()); }
+    constexpr pointer       data_end()                 { return storage_.data(storage_.last()); }
+    constexpr const_pointer data_end()           const { return storage_.data(storage_.last()); }
+    constexpr pointer       data_at(size_type i)       { return storage_.data(i); }
+    constexpr const_pointer data_at(size_type i) const { return storage_.data(i); }
 
     static constexpr inline traits_type traits_{Traits};
 
