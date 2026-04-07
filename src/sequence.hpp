@@ -74,6 +74,29 @@ public:
     constexpr const_reference back()     const { return *(std::prev(data_end())); }
 
     template <typename... Args>
+    constexpr reference unchecked_emplace_front(Args&&... args)
+    {
+        if constexpr (sequence_traits::is_front<Traits>) {
+            move_right(1);
+            ::new(data_begin()) value_type(std::forward<Args>(args)...);
+            storage_.last(storage_.last() + 1);
+        } else if constexpr (sequence_traits::is_middle<Traits>) {
+            if (storage_.first() == 0) {
+                const auto first = (capacity() - size() + 1) / 2;
+                move_right(first);
+                storage_.last(first + size());
+                storage_.first(first);
+            }
+            ::new(std::prev(data_begin())) value_type(std::forward<Args>(args)...);
+            storage_.first(storage_.first() - 1);
+        } else if constexpr (sequence_traits::is_back<Traits>) {
+            ::new(std::prev(data_begin())) value_type(std::forward<Args>(args)...);
+            storage_.first(storage_.first() - 1);
+        }
+        return front();
+    }
+
+    template <typename... Args>
     constexpr reference unchecked_emplace_back(Args&&... args)
     {
         if constexpr (sequence_traits::is_front<Traits>) {
@@ -112,6 +135,19 @@ private:
         std::move(std::next(data_begin(), n_uninitialized), data_end(), data_begin());
         for (size_type i = n_uninitialized; i != 0; --i) {
             std::prev(data_end(), i)->~value_type();
+        }
+    }
+
+    /// Move [first..last) n elements right.
+    constexpr void move_right(size_type n)
+    {
+        const auto n_uninitialized{std::min(n, size())};
+        for (size_type i = 0; i != n_uninitialized; ++i) {
+            ::new(std::next(data_end(), n - i - 1)) value_type(std::move(*std::prev(data_end(), i + 1)));
+        }
+        std::move_backward(data_begin(), std::prev(data_end(), n_uninitialized), data_end());
+        for (size_type i = 0; i != n_uninitialized; ++i) {
+            std::next(data_begin(), i)->~value_type();
         }
     }
 

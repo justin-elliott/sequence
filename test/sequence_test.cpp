@@ -23,6 +23,7 @@
 #include "sequence.hpp"
 
 #include <algorithm>
+#include <ostream>
 #include <ranges>
 
 #include <gmock/gmock.h>
@@ -93,6 +94,20 @@ TYPED_TEST(SequenceTest, can_construct)
 {
     TypeParam seq;
     EXPECT_EQ(seq.size(), 0);
+}
+
+TYPED_TEST(SequenceTest, can_unchecked_emplace_front)
+{
+    TypeParam seq;
+
+    const auto n_values{is_variable<seq.traits()> ? default_size : seq.capacity()};
+    const auto expected_values{this->values() | std::views::take(n_values)};
+    auto moveable_values{this->values()};
+
+    for (auto [moveable_value, expected_value] : std::views::zip(moveable_values, expected_values)) {
+        EXPECT_EQ(seq.unchecked_emplace_front(std::move(moveable_value)), expected_value);
+    }
+    EXPECT_TRUE(std::ranges::equal(seq, expected_values | std::views::reverse));
 }
 
 TYPED_TEST(SequenceTest, can_unchecked_emplace_back)
