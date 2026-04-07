@@ -22,6 +22,8 @@
 
 #pragma once
 
+#include "detail/detached_range.hpp"
+#include "detail/exception_guard.hpp"
 #include "detail/storage.hpp"
 #include "detail/traits.hpp"
 
@@ -76,22 +78,27 @@ public:
     template <typename... Args>
     constexpr reference unchecked_emplace_front(Args&&... args)
     {
-        if constexpr (sequence_traits::is_front<Traits>) {
-            move_right(1);
-            ::new(data_begin()) value_type(std::forward<Args>(args)...);
-            storage_.last(storage_.last() + 1);
-        } else if constexpr (sequence_traits::is_middle<Traits>) {
+        if constexpr (sequence_traits::is_middle<Traits>) {
             if (storage_.first() == 0) {
-                const auto first = (capacity() - size() + 1) / 2;
-                move_right(first);
-                storage_.last(first + size());
-                storage_.first(first);
+                detached_range detached{std::next(data_end(), (capacity() - size() + 1) / 2)};
+                while (data_begin() != data_end()) {
+                    detached.move_front(std::move(back()));
+                    pop_back();
+                }
+                detached.attach(storage_);
             }
+        }
+        if constexpr (sequence_traits::is_middle<Traits> || sequence_traits::is_back<Traits>) {
             ::new(std::prev(data_begin())) value_type(std::forward<Args>(args)...);
             storage_.first(storage_.first() - 1);
-        } else if constexpr (sequence_traits::is_back<Traits>) {
-            ::new(std::prev(data_begin())) value_type(std::forward<Args>(args)...);
-            storage_.first(storage_.first() - 1);
+        } else {
+            detached_range detached{std::next(data_end())};
+            while (data_begin() != data_end()) {
+                detached.move_front(std::move(back()));
+                pop_back();
+            }
+            ::new(data_begin()) value_type(std::forward<Args>(args)...);
+            detached.attach_last(storage_);
         }
         return front();
     }
@@ -99,61 +106,67 @@ public:
     template <typename... Args>
     constexpr reference unchecked_emplace_back(Args&&... args)
     {
-        if constexpr (sequence_traits::is_front<Traits>) {
-            ::new(data_end()) value_type(std::forward<Args>(args)...);
-            storage_.last(storage_.last() + 1);
-        } else if constexpr (sequence_traits::is_middle<Traits>) {
+        if constexpr (sequence_traits::is_middle<Traits>) {
             if (storage_.last() == capacity()) {
-                const auto first = (capacity() - size()) / 2;
-                move_left(storage_.first() - first);
-                storage_.last(first + size());
-                storage_.first(first);
+                detached_range detached{std::prev(data_begin(), (capacity() - size()) / 2)};
+                while (data_begin() != data_end()) {
+                    detached.move_back(std::move(front()));
+                    pop_front();
+                }
+                detached.attach(storage_);
             }
+        }
+        if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
             ::new(data_end()) value_type(std::forward<Args>(args)...);
             storage_.last(storage_.last() + 1);
         } else if constexpr (sequence_traits::is_back<Traits>) {
-            move_left(1);
+            detached_range detached{std::prev(data_begin())};
+            while (data_begin() != data_end()) {
+                detached.move_back(std::move(front()));
+                pop_front();
+            }
             ::new(std::prev(data_end())) value_type(std::forward<Args>(args)...);
-            storage_.first(storage_.first() - 1);
+            detached.attach_first(storage_);
         }
         return back();
     }
 
+    void pop_front()
+    {
+        if constexpr (sequence_traits::is_front<Traits>) {
+            std::move(std::next(data_begin()), data_end(), data_begin());
+            std::prev(data_end())->~value_type();
+            storage_.last(storage_.last() - 1);
+        } else {
+            data_begin()->~value_type();
+            storage_.first(storage_.first() + 1);
+        }
+    }
+
+    void pop_back()
+    {
+        if constexpr (sequence_traits::is_back<Traits>) {
+            std::move_backward(data_begin(), std::prev(data_end()), data_end());
+            data_begin()->~value_type();
+            storage_.first(storage_.first() + 1);
+        } else {
+            std::prev(data_end())->~value_type();
+            storage_.last(storage_.last() - 1);
+        }
+    }
+
 private:
+    using detached_range = detail::detached_range<T, Traits>;
+    using storage_type = detail::storage<T, Traits>;
+
     constexpr pointer       data_begin()       { return storage_.data(storage_.first()); }
     constexpr const_pointer data_begin() const { return storage_.data(storage_.first()); }
     constexpr pointer       data_end()         { return storage_.data(storage_.last()); }
     constexpr const_pointer data_end()   const { return storage_.data(storage_.last()); }
 
-    /// Move [first..last) n elements left.
-    constexpr void move_left(size_type n)
-    {
-        const auto n_uninitialized{std::min(n, size())};
-        for (size_type i = 0; i != n_uninitialized; ++i) {
-            ::new(std::prev(data_begin(), n - i)) value_type(std::move(*std::next(data_begin(), i)));
-        }
-        std::move(std::next(data_begin(), n_uninitialized), data_end(), data_begin());
-        for (size_type i = n_uninitialized; i != 0; --i) {
-            std::prev(data_end(), i)->~value_type();
-        }
-    }
-
-    /// Move [first..last) n elements right.
-    constexpr void move_right(size_type n)
-    {
-        const auto n_uninitialized{std::min(n, size())};
-        for (size_type i = 0; i != n_uninitialized; ++i) {
-            ::new(std::next(data_end(), n - i - 1)) value_type(std::move(*std::prev(data_end(), i + 1)));
-        }
-        std::move_backward(data_begin(), std::prev(data_end(), n_uninitialized), data_end());
-        for (size_type i = 0; i != n_uninitialized; ++i) {
-            std::next(data_begin(), i)->~value_type();
-        }
-    }
-
     static constexpr inline traits_type traits_{Traits};
 
-    [[no_unique_address]] detail::storage<T, Traits> storage_;
+    [[no_unique_address]] storage_type storage_;
 };
 
 } // namespace jell
