@@ -53,16 +53,15 @@ public:
 
 /// Storage for a front inplace sequence.
 template <typename T, sequence_traits::traits auto Traits>
-    requires (!Traits.dynamic) && (Traits.capacity != 0)
-          && (Traits.location == sequence_traits::location::front)
+    requires (!Traits.dynamic) && (Traits.capacity != 0) && sequence_traits::is_front<Traits>
 class storage<T, Traits>
 {
 public:
     using size_type = typename decltype(Traits)::size_type;
 
     static constexpr size_type capacity()              noexcept { return Traits.capacity; }
-    constexpr T*               data(size_type i)       noexcept { return std::addressof(data_[i].value); }
-    constexpr const T*         data(size_type i) const noexcept { return std::addressof(data_[i].value); }
+    constexpr        T*        data(size_type i)       noexcept { return std::addressof(data_[i].value); }
+    constexpr        const T*  data(size_type i) const noexcept { return std::addressof(data_[i].value); }
     static constexpr size_type first()                 noexcept { return 0; }
     static constexpr void      first(size_type)        noexcept {}
     constexpr        size_type last()            const noexcept { return last_; }
@@ -73,20 +72,41 @@ private:
     uninitialized<T> data_[capacity()];
 };
 
-/// Storage for a back inplace sequence.
+/// Storage for a middle inplace sequence.
 template <typename T, sequence_traits::traits auto Traits>
-    requires (!Traits.dynamic) && (Traits.capacity != 0)
-          && (Traits.location == sequence_traits::location::back)
+    requires (!Traits.dynamic) && (Traits.capacity != 0) && sequence_traits::is_middle<Traits>
 class storage<T, Traits>
 {
 public:
     using size_type = typename decltype(Traits)::size_type;
 
     static constexpr size_type capacity()              noexcept { return Traits.capacity; }
-    constexpr T*               data(size_type i)       noexcept { return std::addressof(data_[i].value); }
-    constexpr const T*         data(size_type i) const noexcept { return std::addressof(data_[i].value); }
-    constexpr size_type        first()           const noexcept { return first_; }
-    constexpr void             first(size_type i)      noexcept { first_ = i; }
+    constexpr        T*        data(size_type i)       noexcept { return std::addressof(data_[i].value); }
+    constexpr        const T*  data(size_type i) const noexcept { return std::addressof(data_[i].value); }
+    constexpr        size_type first()           const noexcept { return first_; }
+    constexpr        void      first(size_type i)      noexcept { first_ = i; }
+    constexpr        size_type last()            const noexcept { return last_; }
+    constexpr        void      last(size_type i)       noexcept { last_ = i; }
+
+private:
+    size_type first_{capacity() / 2};
+    size_type last_{capacity() / 2};
+    uninitialized<T> data_[capacity()];
+};
+
+/// Storage for a back inplace sequence.
+template <typename T, sequence_traits::traits auto Traits>
+    requires (!Traits.dynamic) && (Traits.capacity != 0) && sequence_traits::is_back<Traits>
+class storage<T, Traits>
+{
+public:
+    using size_type = typename decltype(Traits)::size_type;
+
+    static constexpr size_type capacity()              noexcept { return Traits.capacity; }
+    constexpr        T*        data(size_type i)       noexcept { return std::addressof(data_[i].value); }
+    constexpr        const T*  data(size_type i) const noexcept { return std::addressof(data_[i].value); }
+    constexpr        size_type first()           const noexcept { return first_; }
+    constexpr        void      first(size_type i)      noexcept { first_ = i; }
     static constexpr size_type last()                  noexcept { return capacity(); }
     static constexpr void      last(size_type)         noexcept {}
 

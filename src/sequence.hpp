@@ -80,7 +80,14 @@ public:
             ::new(data_end()) value_type(std::forward<Args>(args)...);
             storage_.last(storage_.last() + 1);
         } else if constexpr (sequence_traits::is_middle<Traits>) {
-            static_assert(false, "Not implemented");
+            if (storage_.last() == capacity()) {
+                const auto first = (capacity() - size()) / 2;
+                move_left(storage_.first() - first);
+                storage_.last(first + size());
+                storage_.first(first);
+            }
+            ::new(data_end()) value_type(std::forward<Args>(args)...);
+            storage_.last(storage_.last() + 1);
         } else if constexpr (sequence_traits::is_back<Traits>) {
             move_left(1);
             ::new(std::prev(data_end())) value_type(std::forward<Args>(args)...);
@@ -95,7 +102,7 @@ private:
     constexpr pointer       data_end()         { return storage_.data(storage_.last()); }
     constexpr const_pointer data_end()   const { return storage_.data(storage_.last()); }
 
-    /// Move [first()..last()) n elements left.
+    /// Move [first..last) n elements left.
     constexpr void move_left(size_type n)
     {
         const auto n_uninitialized{std::min(n, size())};

@@ -80,9 +80,12 @@ const std::size_t default_size{32};
 
 using sequence_types = testing::Types<
     sequence<double, inplace_t{0}>,
-    sequence<std::uint16_t, inplace_t<std::uint16_t>{default_size * 2}>,
+    sequence<std::uint16_t, inplace_t{default_size, sequence_traits::location::front}>,
+    sequence<std::uint16_t, inplace_t{default_size, sequence_traits::location::middle}>,
     sequence<std::uint16_t, inplace_t{default_size, sequence_traits::location::back}>,
-    sequence<MoveOnly, inplace_t{default_size}>
+    sequence<MoveOnly, inplace_t{default_size, sequence_traits::location::front}>,
+    sequence<MoveOnly, inplace_t{default_size, sequence_traits::location::middle}>,
+    sequence<MoveOnly, inplace_t{default_size, sequence_traits::location::back}>
 >;
 TYPED_TEST_SUITE(SequenceTest, sequence_types);
 
