@@ -34,7 +34,7 @@ namespace jell::detail::sequence_traits {
 enum class location : unsigned char
 {
     front,  ///< Store elements from front-to-back (vector).
-    middle, ///< Store elements from the middle out (deque).
+    middle, ///< Store elements from the middle-out (deque).
     back,   ///< Store elements from back-to-front (stack).
 };
 
@@ -101,5 +101,28 @@ struct inplace_t
     size_type           capacity{0};               //< The size of the fixed capacity.
     location            location{location::front}; //< The layout of elements.
 };
+
+/// Check whether the traits define a variable sequence.
+template <traits auto traits>
+struct is_variable_type : std::bool_constant<traits.dynamic && traits.variable> {};
+
+template <inplace_traits auto traits>
+struct is_variable_type<traits> : std::false_type {};
+
+/// Check whether the traits define a variable sequence.
+template <traits auto traits>
+constexpr bool is_variable = is_variable_type<traits>::value;
+
+/// Check whether the traits define a front-to-back sequence.
+template <traits auto traits>
+constexpr bool is_front = (traits.location == location::front);
+
+/// Check whether the traits define a middle-out sequence.
+template <traits auto traits>
+constexpr bool is_middle = (traits.location == location::middle);
+
+/// Check whether the traits define a back-to-front sequence.
+template <traits auto traits>
+constexpr bool is_back = (traits.location == location::back);
 
 } // namespace jell::detail::sequence_traits

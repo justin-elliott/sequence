@@ -32,41 +32,66 @@ namespace jell::detail {
 /// @brief Storage for a sequence.
 /// @tparam T The type of elements stored in the sequence.
 /// @tparam traits Traits defining the sequence.
-template <typename T, sequence_traits::traits auto traits>
+template <typename T, sequence_traits::traits auto Traits>
 class storage;
 
 /// Storage for a zero-length inplace sequence.
-template <typename T, sequence_traits::traits auto traits>
-    requires (!traits.dynamic) && (traits.capacity == 0)
-class storage<T, traits>
+template <typename T, sequence_traits::traits auto Traits>
+    requires (!Traits.dynamic) && (Traits.capacity == 0)
+class storage<T, Traits>
 {
 public:
-    using size_type = typename decltype(traits)::size_type;
+    using size_type = typename decltype(Traits)::size_type;
 
-    static constexpr size_type capacity()            noexcept { return 0; }
-    static constexpr void      capacity(size_type)   noexcept {}
-    static constexpr size_type size()                noexcept { return 0; }
-    static constexpr void      size(size_type)       noexcept {}
-    static constexpr T*        data()                noexcept { return nullptr; }
+    static constexpr size_type capacity()       noexcept { return 0; }
+    static constexpr T*        data(size_type)  noexcept { return nullptr; }
+    static constexpr size_type first()          noexcept { return 0; }
+    static constexpr void      first(size_type) noexcept {}
+    static constexpr size_type last()           noexcept { return 0; }
+    static constexpr void      last(size_type)  noexcept {}
 };
 
-/// Storage for an inplace sequence.
-template <typename T, sequence_traits::traits auto traits>
-    requires (!traits.dynamic) && (traits.capacity != 0)
-class storage<T, traits>
+/// Storage for a front inplace sequence.
+template <typename T, sequence_traits::traits auto Traits>
+    requires (!Traits.dynamic) && (Traits.capacity != 0)
+          && (Traits.location == sequence_traits::location::front)
+class storage<T, Traits>
 {
 public:
-    using size_type = typename decltype(traits)::size_type;
+    using size_type = typename decltype(Traits)::size_type;
 
-    static constexpr size_type capacity()            noexcept { return traits.capacity; }
-    static constexpr void      capacity(size_type)   noexcept {}
-    constexpr size_type        size()          const noexcept { return size_; }
-    constexpr void             size(size_type n)     noexcept { size_ = n; }
-    constexpr T*               data()                noexcept { return std::addressof(data_[0].value); }
-    constexpr const T*         data()          const noexcept { return std::addressof(data_[0].value); }
+    static constexpr size_type capacity()              noexcept { return Traits.capacity; }
+    constexpr T*               data(size_type i)       noexcept { return std::addressof(data_[i].value); }
+    constexpr const T*         data(size_type i) const noexcept { return std::addressof(data_[i].value); }
+    static constexpr size_type first()                 noexcept { return 0; }
+    static constexpr void      first(size_type)        noexcept {}
+    constexpr        size_type last()            const noexcept { return last_; }
+    constexpr        void      last(size_type i)       noexcept { last_ = i; }
 
 private:
-    size_type size_{0};
+    size_type last_{0};
+    uninitialized<T> data_[capacity()];
+};
+
+/// Storage for a back inplace sequence.
+template <typename T, sequence_traits::traits auto Traits>
+    requires (!Traits.dynamic) && (Traits.capacity != 0)
+          && (Traits.location == sequence_traits::location::back)
+class storage<T, Traits>
+{
+public:
+    using size_type = typename decltype(Traits)::size_type;
+
+    static constexpr size_type capacity()              noexcept { return Traits.capacity; }
+    constexpr T*               data(size_type i)       noexcept { return std::addressof(data_[i].value); }
+    constexpr const T*         data(size_type i) const noexcept { return std::addressof(data_[i].value); }
+    constexpr size_type        first()           const noexcept { return first_; }
+    constexpr void             first(size_type i)      noexcept { first_ = i; }
+    static constexpr size_type last()                  noexcept { return capacity(); }
+    static constexpr void      last(size_type)         noexcept {}
+
+private:
+    size_type first_{capacity()};
     uninitialized<T> data_[capacity()];
 };
 

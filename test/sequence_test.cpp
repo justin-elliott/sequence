@@ -22,32 +22,88 @@
 
 #include "sequence.hpp"
 
+#include <algorithm>
+#include <ranges>
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+
+namespace {
 
 using namespace jell;
 using namespace jell::sequence_traits;
 
-TEST(SequenceTest, can_construct_inplace)
+template <typename T>
+class SequenceTest : public testing::Test
 {
-    sequence<int, inplace_t{1'000}> seq;
-    static_cast<void>(seq);
+protected:
+    using value_type = T::value_type;
+    using size_type = T::size_type;
+
+    static constexpr value_type make_value_type(size_type value)
+    {
+        if constexpr (std::is_arithmetic_v<value_type>) {
+            return static_cast<value_type>(value);
+        } else {
+            return value_type{value};
+        }
+    }
+
+    static constexpr auto values()
+    {
+        return std::views::iota(size_type{100})
+             | std::views::transform([](size_type i) { return make_value_type(i); });
+    }
+};
+
+class MoveOnly
+{
+public:
+    constexpr MoveOnly() = delete;
+    constexpr explicit MoveOnly(std::size_t value) : value_{value} {}
+
+    constexpr MoveOnly(const MoveOnly&) = delete;
+    constexpr MoveOnly& operator=(const MoveOnly&) = delete;
+
+    constexpr MoveOnly(MoveOnly&&) = default;
+    constexpr MoveOnly& operator=(MoveOnly&&) = default;
+
+    constexpr ~MoveOnly() = default;
+
+    constexpr friend bool operator==(const MoveOnly&, const MoveOnly&) = default;
+
+private:
+    std::size_t value_{0};
+};
+
+const std::size_t default_size{32};
+
+using sequence_types = testing::Types<
+    sequence<double, inplace_t{0}>,
+    sequence<std::uint16_t, inplace_t<std::uint16_t>{default_size * 2}>,
+    sequence<std::uint16_t, inplace_t{default_size, sequence_traits::location::back}>,
+    sequence<MoveOnly, inplace_t{default_size}>
+>;
+TYPED_TEST_SUITE(SequenceTest, sequence_types);
+
+TYPED_TEST(SequenceTest, can_construct)
+{
+    TypeParam seq;
     EXPECT_EQ(seq.size(), 0);
-    EXPECT_EQ(seq.capacity(), 1'000);
 }
 
-TEST(SequenceTest, can_construct_inplace_with_traits_t)
+TYPED_TEST(SequenceTest, can_unchecked_emplace_back)
 {
-    sequence<int, traits_t<unsigned char>{.dynamic = false, .capacity = 100}> seq;
-    static_cast<void>(seq);
-    EXPECT_EQ(seq.size(), 0);
-    EXPECT_EQ(seq.capacity(), 100);
+    TypeParam seq;
+
+    const auto n_values{is_variable<seq.traits()> ? default_size : seq.capacity()};
+    const auto expected_values{this->values() | std::views::take(n_values)};
+    auto moveable_values{this->values()};
+
+    for (auto [moveable_value, expected_value] : std::views::zip(moveable_values, expected_values)) {
+        EXPECT_EQ(seq.unchecked_emplace_back(std::move(moveable_value)), expected_value);
+    }
+    EXPECT_TRUE(std::ranges::equal(seq, expected_values));
 }
 
-TEST(SequenceTest, can_construct_zero_size_inplace)
-{
-    sequence<int, inplace_t{0}> seq;
-    static_cast<void>(seq);
-    EXPECT_EQ(seq.size(), 0);
-    EXPECT_EQ(seq.capacity(), 0);
-}
+} // namespace
