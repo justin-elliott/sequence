@@ -24,18 +24,18 @@
 
 namespace jell::detail {
 
-template <typename UnreleasedFn>
+template <typename UnreleasedAction>
 class exception_guard
 {
 public:
-    exception_guard(UnreleasedFn unreleasedFn)
-        : unreleasedFn_{unreleasedFn}
+    exception_guard(UnreleasedAction unreleased_action)
+        : unreleased_action_{unreleased_action}
     {}
 
     ~exception_guard()
     {
         if (!released_) {
-            unreleasedFn_();
+            unreleased_action_();
         }
     }
 
@@ -43,7 +43,7 @@ public:
 
 private:
     bool released_{false};
-    UnreleasedFn unreleasedFn_;
+    UnreleasedAction unreleased_action_;
 };
 
 } // namespace jell::detail

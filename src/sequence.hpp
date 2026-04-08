@@ -93,17 +93,9 @@ public:
             ::new(std::prev(data_begin())) value_type(std::forward<Args>(args)...);
             storage_.first(storage_.first() - 1);
         } else {
-            if (empty()) {
-                ::new(data_begin()) value_type(std::forward<Args>(args)...);
-                storage_.last(storage_.last() + 1);
-            } else {
-                value_type tmp{std::forward<Args>(args)...};
-                const auto to{data_end()};
-                ::new(to) value_type(std::move(*std::prev(to)));
-                storage_.last(storage_.last() + 1);
-                std::move_backward(data_begin(), std::prev(to), to);
-                *data_begin() = std::move(tmp);
-            }
+            ::new(data_end()) value_type(std::forward<Args>(args)...);
+            storage_.last(storage_.last() + 1);
+            rotate_right(data_begin(), data_end());
         }
         return front();
     }
@@ -125,17 +117,9 @@ public:
             ::new(data_end()) value_type(std::forward<Args>(args)...);
             storage_.last(storage_.last() + 1);
         } else if constexpr (sequence_traits::is_back<Traits>) {
-            if (empty()) {
-                ::new(std::prev(data_end())) value_type(std::forward<Args>(args)...);
-                storage_.first(storage_.first() - 1);
-            } else {
-                value_type tmp{std::forward<Args>(args)...};
-                const auto from{data_begin()};
-                ::new(std::prev(from)) value_type(std::move(*from));
-                storage_.first(storage_.first() - 1);
-                std::move(std::next(from), data_end(), from);
-                *std::prev(data_end()) = std::move(tmp);
-            }
+            ::new(std::prev(data_begin())) value_type(std::forward<Args>(args)...);
+            storage_.first(storage_.first() - 1);
+            rotate_left(data_begin(), data_end());
         }
         return back();
     }
@@ -175,7 +159,30 @@ private:
     constexpr pointer       data_at(size_type i)       { return storage_.data(i); }
     constexpr const_pointer data_at(size_type i) const { return storage_.data(i); }
 
-    static constexpr inline traits_type traits_{Traits};
+    constexpr size_type data_index(const_pointer pos) const
+    {
+        return static_cast<size_type>(std::distance(storage_.data(0), pos));
+    }
+
+    void rotate_left(pointer from, pointer to)
+    {
+        if (std::distance(from, to) > 1) {
+            value_type tmp{std::move(*from)};
+            std::move(std::next(from), to, from);
+            *std::prev(to) = std::move(tmp);
+        }
+    }
+
+    void rotate_right(pointer from, pointer to)
+    {
+        if (std::distance(from, to) > 1) {
+            value_type tmp{std::move(*std::prev(to))};
+            std::move_backward(from, std::prev(to), to);
+            *from = std::move(tmp);
+        }
+    }
+
+    static inline constexpr traits_type traits_{Traits};
 
     [[no_unique_address]] storage_type storage_;
 };
