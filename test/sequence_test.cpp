@@ -64,7 +64,7 @@ protected:
 struct MoveOnly
 {
     constexpr MoveOnly() = delete;
-    constexpr explicit MoveOnly(std::size_t value) : value{static_cast<std::ptrdiff_t>(value)} {}
+    constexpr explicit MoveOnly(std::size_t value) : value{value} {}
 
     constexpr MoveOnly(const MoveOnly&) = delete;
     constexpr MoveOnly& operator=(const MoveOnly&) = delete;
@@ -72,11 +72,12 @@ struct MoveOnly
     constexpr MoveOnly(MoveOnly&&) = default;
     constexpr MoveOnly& operator=(MoveOnly&&) = default;
 
-    constexpr ~MoveOnly() { value = -1; }
+    constexpr ~MoveOnly() { value = error_value; }
 
     constexpr friend bool operator==(const MoveOnly&, const MoveOnly&) = default;
 
-    std::ptrdiff_t value{-1};
+    static inline const std::size_t error_value{static_cast<std::size_t>(-1)};
+    std::size_t value{error_value};
 };
 
 template <>
@@ -86,7 +87,10 @@ struct std::formatter<MoveOnly>
 
     auto format(const MoveOnly& move_only, auto&& ctx) const
     {
-        return std::format_to(ctx.out(), "MoveOnly({})", move_only.value);
+        if (move_only.value == MoveOnly::error_value) {
+            return std::format_to(ctx.out(), "(/)");
+        }
+        return std::format_to(ctx.out(), "{}", move_only.value);
     }
 };
 
@@ -114,24 +118,25 @@ TYPED_TEST(SequenceTest, can_unchecked_emplace_front)
 {
     TypeParam seq;
 
-    const auto n_values{is_variable<seq.traits()> ? default_size : seq.capacity()};
-    const auto expected_values{this->values(n_values)};
-    auto moveable_values{this->values()};
+    const auto n_values = is_variable<seq.traits()> ? default_size : seq.capacity();
+    const auto expected_emplaced = this->values(n_values);
+    auto moveable_values = this->values();
 
-    for (auto [moveable_value, expected_value] : std::views::zip(moveable_values, expected_values)) {
+    for (auto [moveable_value, expected_value] : std::views::zip(moveable_values, expected_emplaced)) {
         EXPECT_EQ(seq.unchecked_emplace_front(std::move(moveable_value)), expected_value);
     }
-    EXPECT_TRUE(std::ranges::equal(seq, expected_values | std::views::reverse))
-        << std::format("{} != {}", seq, expected_values | std::views::reverse);
+    auto expected_values = expected_emplaced | std::views::reverse;
+    EXPECT_TRUE(std::ranges::equal(seq, expected_values))
+        << std::format("{} != {}", seq, expected_values);
 }
 
 TYPED_TEST(SequenceTest, can_unchecked_emplace_back)
 {
     TypeParam seq;
 
-    const auto n_values{is_variable<seq.traits()> ? default_size : seq.capacity()};
-    const auto expected_values{this->values(n_values)};
-    auto moveable_values{this->values()};
+    const auto n_values = is_variable<seq.traits()> ? default_size : seq.capacity();
+    const auto expected_values = this->values(n_values);
+    auto moveable_values = this->values();
 
     for (auto [moveable_value, expected_value] : std::views::zip(moveable_values, expected_values)) {
         EXPECT_EQ(seq.unchecked_emplace_back(std::move(moveable_value)), expected_value);

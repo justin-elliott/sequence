@@ -76,6 +76,14 @@ public:
     constexpr reference       back()           { return *(std::prev(data_end())); }
     constexpr const_reference back()     const { return *(std::prev(data_end())); }
 
+    /// Appends a new element to the front of the container.
+    /// Before the call to this function `size() < capacity()` must be true. Otherwise, the behavior is undefined.
+    /// @param args Arguments to forward to the constructor of the element. 
+    /// @return A reference to the inserted element.
+    /// @exception Any exception thrown by initialization of the inserted element, or while moving other elements. If an
+    ///            exception is thrown for any reason, this function has no effect for `location::back` sequences
+    ///            (strong exception guarantee), and leaves the sequence in a valid state for other sequence types
+    ///            (basic exception guarantee).
     template <typename... Args>
     constexpr reference unchecked_emplace_front(Args&&... args)
     {
@@ -95,6 +103,14 @@ public:
         return front();
     }
 
+    /// Appends a new element to the back of the container.
+    /// Before the call to this function `size() < capacity()` must be true. Otherwise, the behavior is undefined.
+    /// @param args Arguments to forward to the constructor of the element. 
+    /// @return A reference to the inserted element.
+    /// @exception Any exception thrown by initialization of the inserted element, or while moving other elements. If an
+    ///            exception is thrown for any reason, this function has no effect for `location::front` sequences
+    ///            (strong exception guarantee), and leaves the sequence in a valid state for other sequence types
+    ///            (basic exception guarantee).
     template <typename... Args>
     constexpr reference unchecked_emplace_back(Args&&... args)
     {
