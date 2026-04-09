@@ -107,14 +107,14 @@ using sequence_types = testing::Types<
 >;
 TYPED_TEST_SUITE(SequenceTest, sequence_types);
 
-TYPED_TEST(SequenceTest, can_construct)
+TYPED_TEST(SequenceTest, default_construct)
 {
     TypeParam seq;
     EXPECT_TRUE(seq.empty()) << std::format("{}", seq);
     EXPECT_EQ(seq.size(), 0) << std::format("{}", seq);
 }
 
-TYPED_TEST(SequenceTest, can_unchecked_emplace_front)
+TYPED_TEST(SequenceTest, unchecked_emplace_front)
 {
     TypeParam seq;
 
@@ -130,7 +130,24 @@ TYPED_TEST(SequenceTest, can_unchecked_emplace_front)
         << std::format("{} != {}", seq, expected_values);
 }
 
-TYPED_TEST(SequenceTest, can_unchecked_emplace_back)
+TYPED_TEST(SequenceTest, try_emplace_front)
+{
+    TypeParam seq;
+    EXPECT_EQ((seq.try_emplace_front(this->make_value_type(100)) != nullptr), (seq.capacity() > 0));
+}
+
+TYPED_TEST(SequenceTest, try_emplace_front_at_capacity)
+{
+    TypeParam seq;
+    if constexpr (!is_variable<seq.traits()>) {
+        while (seq.size() < seq.capacity()) {
+            EXPECT_NE(seq.try_emplace_front(this->make_value_type(0)), nullptr);
+        }
+        EXPECT_EQ(seq.try_emplace_front(this->make_value_type(100)), nullptr);
+    }
+}
+
+TYPED_TEST(SequenceTest, unchecked_emplace_back)
 {
     TypeParam seq;
 
@@ -143,4 +160,21 @@ TYPED_TEST(SequenceTest, can_unchecked_emplace_back)
     }
     EXPECT_TRUE(std::ranges::equal(seq, expected_values))
         << std::format("{} != {}", seq, expected_values);
+}
+
+TYPED_TEST(SequenceTest, try_emplace_back)
+{
+    TypeParam seq;
+    EXPECT_EQ((seq.try_emplace_back(this->make_value_type(100)) != nullptr), (seq.capacity() > 0));
+}
+
+TYPED_TEST(SequenceTest, try_emplace_back_at_capacity)
+{
+    TypeParam seq;
+    if constexpr (!is_variable<seq.traits()>) {
+        while (seq.size() < seq.capacity()) {
+            EXPECT_NE(seq.try_emplace_back(this->make_value_type(0)), nullptr);
+        }
+        EXPECT_EQ(seq.try_emplace_back(this->make_value_type(100)), nullptr);
+    }
 }

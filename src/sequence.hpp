@@ -76,7 +76,7 @@ public:
     constexpr reference       back()           { return *(std::prev(data_end())); }
     constexpr const_reference back()     const { return *(std::prev(data_end())); }
 
-    /// Appends a new element to the front of the container.
+    /// Prepends a new element to the front of the container.
     ///
     /// Before the call to this function `size() < capacity()` must be true. Otherwise, the behavior is undefined.
     ///
@@ -106,6 +106,28 @@ public:
             rotate_right(data_begin(), data_end());
         }
         return front();
+    }
+
+    /// Conditionally prepends a new element to the front of the container.
+    ///
+    /// If `size() == capacity()`, there are no effects. Otherwise, the new element is prepended.
+    ///
+    /// For `location::back` sequences, no iterators or references are invalidated, except begin(). For other sequences,
+    /// all iterators and references are invalidated.
+    ///
+    /// @param args Arguments to forward to the constructor of the element. 
+    /// @return A pointer to the inserted element if `size() < capacity()`, `nullptr` otherwise.
+    /// @exception Any exception thrown by initialization of the inserted element, or while moving other elements. If an
+    ///            exception is thrown for any reason, this function has no effect for `location::back` sequences
+    ///            (strong exception guarantee), and leaves the sequence in a valid state for other sequence types
+    ///            (basic exception guarantee).
+    template <typename... Args>
+    constexpr pointer try_emplace_front(Args&&... args)
+    {
+        if (size() == capacity()) {
+            return nullptr;
+        }
+        return std::addressof(unchecked_emplace_front(std::forward<Args>(args)...));
     }
 
     /// Appends a new element to the back of the container.
@@ -138,6 +160,28 @@ public:
             rotate_left(data_begin(), data_end());
         }
         return back();
+    }
+
+    /// Conditionally appends a new element to the back of the container.
+    ///
+    /// If `size() == capacity()`, there are no effects. Otherwise, the new element is appended.
+    ///
+    /// For `location::front` sequences, no iterators or references are invalidated, except end(). For other sequences,
+    /// all iterators and references are invalidated.
+    ///
+    /// @param args Arguments to forward to the constructor of the element. 
+    /// @return A pointer to the inserted element if `size() < capacity()`, `nullptr` otherwise.
+    /// @exception Any exception thrown by initialization of the inserted element, or while moving other elements. If an
+    ///            exception is thrown for any reason, this function has no effect for `location::front` sequences
+    ///            (strong exception guarantee), and leaves the sequence in a valid state for other sequence types
+    ///            (basic exception guarantee).
+    template <typename... Args>
+    constexpr pointer try_emplace_back(Args&&... args)
+    {
+        if (size() == capacity()) {
+            return nullptr;
+        }
+        return std::addressof(unchecked_emplace_back(std::forward<Args>(args)...));
     }
 
     void pop_front()
