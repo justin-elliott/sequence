@@ -1,6 +1,8 @@
 add_library(
     Sequence INTERFACE
     sequence.hpp
+    detail/exception_guard.hpp
+    detail/range_guard.hpp
     detail/storage.hpp
     detail/traits.hpp
     detail/uninitialized.hpp

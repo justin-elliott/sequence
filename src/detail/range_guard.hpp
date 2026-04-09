@@ -22,28 +22,18 @@
 
 #pragma once
 
+#include <memory>
+
 namespace jell::detail {
 
-template <typename UnreleasedAction>
-class exception_guard
+template <typename T>
+struct range_guard
 {
-public:
-    constexpr exception_guard(UnreleasedAction unreleased_action)
-        : unreleased_action_{unreleased_action}
-    {}
+    constexpr ~range_guard() { std::ranges::destroy(first, last); }
+    constexpr void release() { first = last; }
 
-    constexpr ~exception_guard()
-    {
-        if (!released_) {
-            unreleased_action_();
-        }
-    }
-
-    constexpr void release() { released_ = true; }
-
-private:
-    bool released_{false};
-    UnreleasedAction unreleased_action_;
+    T* first;
+    T* last;
 };
 
 } // namespace jell::detail

@@ -68,6 +68,11 @@ protected:
         return std::views::iota(size_type{100})
              | std::views::transform([](size_type i) { return make_value_type(i); });
     }
+
+    static constexpr auto values(size_type count)
+    {
+        return values() | std::views::take(count);
+    }
 };
 
 struct MoveOnly
@@ -117,7 +122,7 @@ TYPED_TEST(SequenceTest, can_unchecked_emplace_front)
     TypeParam seq;
 
     const auto n_values{is_variable<seq.traits()> ? default_size : seq.capacity()};
-    const auto expected_values{this->values() | std::views::take(n_values)};
+    const auto expected_values{this->values(n_values)};
     auto moveable_values{this->values()};
 
     for (auto [moveable_value, expected_value] : std::views::zip(moveable_values, expected_values)) {
@@ -131,7 +136,7 @@ TYPED_TEST(SequenceTest, can_unchecked_emplace_back)
     TypeParam seq;
 
     const auto n_values{is_variable<seq.traits()> ? default_size : seq.capacity()};
-    const auto expected_values{this->values() | std::views::take(n_values)};
+    const auto expected_values{this->values(n_values)};
     auto moveable_values{this->values()};
 
     for (auto [moveable_value, expected_value] : std::views::zip(moveable_values, expected_values)) {

@@ -22,8 +22,8 @@
 
 #pragma once
 
-#include "detail/detached_range.hpp"
 #include "detail/exception_guard.hpp"
+#include "detail/range_guard.hpp"
 #include "detail/storage.hpp"
 #include "detail/traits.hpp"
 
@@ -81,12 +81,7 @@ public:
     {
         if constexpr (sequence_traits::is_middle<Traits>) {
             if (storage_.first() == 0) {
-                detached_range detached{data_at(capacity() - (capacity() - size()) / 2)};
-                while (data_begin() != data_end()) {
-                    detached.move_front(std::move(back()));
-                    pop_back();
-                }
-                detached.attach(storage_);
+                move_to_right((capacity() - size() + 1) / 2);
             }
         }
         if constexpr (sequence_traits::is_middle<Traits> || sequence_traits::is_back<Traits>) {
@@ -105,12 +100,7 @@ public:
     {
         if constexpr (sequence_traits::is_middle<Traits>) {
             if (storage_.last() == capacity()) {
-                detached_range detached{data_at((capacity() - size()) / 2)};
-                while (data_begin() != data_end()) {
-                    detached.move_back(std::move(front()));
-                    pop_front();
-                }
-                detached.attach(storage_);
+                move_to_left((capacity() - size()) / 2);
             }
         }
         if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
@@ -149,7 +139,7 @@ public:
     }
 
 private:
-    using detached_range = detail::detached_range<T, Traits>;
+    using range_guard = detail::range_guard<T>;
     using storage_type = detail::storage<T, Traits>;
 
     constexpr pointer       data_begin()               { return storage_.data(storage_.first()); }
@@ -164,7 +154,7 @@ private:
         return static_cast<size_type>(std::distance(storage_.data(0), pos));
     }
 
-    void rotate_left(pointer from, pointer to)
+    constexpr void rotate_left(pointer from, pointer to)
     {
         if (std::distance(from, to) > 1) {
             value_type tmp{std::move(*from)};
@@ -173,13 +163,51 @@ private:
         }
     }
 
-    void rotate_right(pointer from, pointer to)
+    constexpr void rotate_right(pointer from, pointer to)
     {
         if (std::distance(from, to) > 1) {
             value_type tmp{std::move(*std::prev(to))};
             std::move_backward(from, std::prev(to), to);
             *from = std::move(tmp);
         }
+    }
+
+    constexpr void move_to_left(size_type new_first) requires sequence_traits::is_middle<Traits>
+    {
+        const auto uninitialized_available = storage_.first() - new_first;
+        const auto uninitialized_size = std::min(uninitialized_available, size());
+        const auto to = std::next(data_begin(), uninitialized_size);
+        auto guarded = uninitialized_move(data_begin(), to, data_at(new_first));
+        const auto old_end = data_end();
+        const auto last = std::move(to, old_end, guarded.last);
+        storage_.first(data_index(guarded.first));
+        storage_.last(data_index(last));
+        guarded.release();
+        std::ranges::destroy(last, old_end);
+    }
+
+    constexpr void move_to_right(size_type new_first) requires sequence_traits::is_middle<Traits>
+    {
+        const auto uninitialized_available = new_first - storage_.first();
+        const auto uninitialized_size = std::min(uninitialized_available, size());
+        const auto uninitialized_end = data_at(new_first + size());
+        const auto from = std::prev(data_end(), uninitialized_size);
+        auto guarded = uninitialized_move(from, data_end(), std::prev(uninitialized_end, uninitialized_size));
+        const auto old_begin = data_begin();
+        const auto first = std::move_backward(old_begin, from, guarded.first);
+        storage_.first(data_index(first));
+        storage_.last(data_index(guarded.last));
+        guarded.release();
+        std::ranges::destroy(old_begin, first);
+    }
+
+    constexpr range_guard uninitialized_move(pointer from, pointer to, pointer dst)
+    {
+        range_guard range{dst, dst};
+        for (; from != to; ++range.last, ++from) {
+            ::new(range.last) value_type(std::move(*from));
+        }
+        return range;
     }
 
     static inline constexpr traits_type traits_{Traits};
