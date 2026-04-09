@@ -1,6 +1,7 @@
 add_library(
     Sequence INTERFACE
     sequence.hpp
+    detail/container_compatible_range.hpp
     detail/exception_guard.hpp
     detail/range_guard.hpp
     detail/storage.hpp

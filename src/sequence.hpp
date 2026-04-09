@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include "detail/container_compatible_range.hpp"
 #include "detail/exception_guard.hpp"
 #include "detail/range_guard.hpp"
 #include "detail/storage.hpp"
@@ -52,10 +53,40 @@ public:
     using reverse_iterator       = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
-    sequence() = default;
+    constexpr sequence() = default;
 
-    ~sequence() requires std::is_trivially_destructible_v<value_type> = default;
-    ~sequence() { std::ranges::destroy(begin(), end()); }
+    constexpr explicit sequence(size_type count);
+    constexpr sequence(size_type count, const value_type& value);
+
+    template <class InputIt>
+    constexpr sequence(InputIt first, InputIt last)
+    {
+        if constexpr (std::random_access_iterator<InputIt>) {
+            ensure_can_grow_by(std::distance(first, last));
+        }
+
+        detail::exception_guard guard{&sequence::destroy_all, this};
+        if constexpr (std::random_access_iterator<InputIt>) {
+            for (; first != last; ++first) {
+                unchecked_emplace_back(*first);
+            }
+        } else {
+            for (; first != last; ++first) {
+                emplace_back(*first);
+            }
+        }
+        guard.release();
+    }
+
+    template <detail::container_compatible_range<value_type> Range>
+    constexpr sequence(std::from_range_t, Range&& rg);
+    constexpr sequence(const sequence& other);
+    constexpr sequence(sequence&& other)
+        noexcept(max_size() == 0 || std::is_nothrow_move_constructible_v<value_type>);
+    constexpr sequence(std::initializer_list<value_type> init);
+
+    constexpr ~sequence() requires std::is_trivially_destructible_v<value_type> = default;
+    constexpr ~sequence() { std::ranges::destroy(begin(), end()); }
 
     static constexpr const traits_type& traits() noexcept { return traits_; }
 
@@ -69,7 +100,9 @@ public:
         }
     }
 
-    constexpr size_type       capacity() const { return storage_.capacity(); }
+    static constexpr size_type capacity() requires (!sequence_traits::is_variable<Traits>) { return Traits.capacity; }
+    constexpr size_type capacity() const { return storage_.capacity(); }
+
     constexpr bool            empty()    const { return storage_.last() == storage_.first(); }
     constexpr size_type       size()     const { return storage_.last() - storage_.first(); }
     constexpr pointer         data()           { return data_begin(); }
@@ -233,7 +266,7 @@ public:
         return unchecked_emplace_back(std::forward<Args>(args)...);
     }
 
-    void pop_front()
+    constexpr void pop_front()
     {
         if constexpr (sequence_traits::is_front<Traits>) {
             std::move(std::next(data_begin()), data_end(), data_begin());
@@ -245,7 +278,7 @@ public:
         }
     }
 
-    void pop_back()
+    constexpr void pop_back()
     {
         if constexpr (sequence_traits::is_back<Traits>) {
             std::move_backward(data_begin(), std::prev(data_end()), data_end());
@@ -273,9 +306,11 @@ private:
         return static_cast<size_type>(std::distance(storage_.data(0), pos));
     }
 
-    constexpr void ensure_can_grow_by(size_type n)
+    constexpr void destroy_all() { std::ranges::destroy(begin(), end()); }
+
+    constexpr void ensure_can_grow_by(difference_type n)
     {
-        if (capacity() - size() < n) {
+        if (static_cast<difference_type>(capacity() - size()) < n) {
             if constexpr (sequence_traits::is_variable<Traits>) {
                 static_assert(false, "Not implemented");
             } else {

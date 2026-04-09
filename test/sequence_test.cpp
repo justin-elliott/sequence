@@ -26,6 +26,7 @@
 #include <cstddef>
 #include <format>
 #include <ranges>
+#include <vector>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -59,6 +60,17 @@ protected:
     {
         return values() | std::views::take(count);
     }
+
+    struct to_vector_t : std::ranges::range_adaptor_closure<to_vector_t>
+    {
+        template <std::ranges::viewable_range R>
+        constexpr std::vector<value_type> operator()(R&& r) const
+        {
+            return std::forward<R>(r) | std::ranges::to<std::vector<value_type>>();
+        }
+    };
+
+    static constexpr to_vector_t to_vector() { return to_vector_t{}; }
 };
 
 struct MoveOnly
@@ -114,18 +126,29 @@ TYPED_TEST(SequenceTest, default_construct)
     EXPECT_EQ(seq.size(), 0) << std::format("{}", seq);
 }
 
+TYPED_TEST(SequenceTest, construct_iterators)
+{
+    const auto n_values = is_variable<TypeParam::traits()> ? default_size : TypeParam::max_size();
+    const auto expected_values = this->values(n_values);
+    auto values = this->values(n_values) | this->to_vector();
+    TypeParam seq(std::make_move_iterator(values.begin()),
+                  std::make_move_iterator(values.end()));
+    EXPECT_TRUE(std::ranges::equal(seq, expected_values))
+        << std::format("{} != {}", seq, expected_values);
+}
+
 TYPED_TEST(SequenceTest, unchecked_emplace_front)
 {
     TypeParam seq;
 
-    const auto n_values = is_variable<seq.traits()> ? default_size : seq.capacity();
+    const auto n_values = is_variable<TypeParam::traits()> ? default_size : TypeParam::max_size();
     const auto expected_emplaced = this->values(n_values);
+    const auto expected_values = expected_emplaced | std::views::reverse | this->to_vector();
     auto moveable_values = this->values();
 
     for (auto [moveable_value, expected_value] : std::views::zip(moveable_values, expected_emplaced)) {
         EXPECT_EQ(seq.unchecked_emplace_front(std::move(moveable_value)), expected_value);
     }
-    auto expected_values = expected_emplaced | std::views::reverse;
     EXPECT_TRUE(std::ranges::equal(seq, expected_values))
         << std::format("{} != {}", seq, expected_values);
 }
@@ -171,7 +194,7 @@ TYPED_TEST(SequenceTest, unchecked_emplace_back)
 {
     TypeParam seq;
 
-    const auto n_values = is_variable<seq.traits()> ? default_size : seq.capacity();
+    const auto n_values = is_variable<TypeParam::traits()> ? default_size : TypeParam::max_size();
     const auto expected_values = this->values(n_values);
     auto moveable_values = this->values();
 

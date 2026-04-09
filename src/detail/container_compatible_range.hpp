@@ -22,32 +22,13 @@
 
 #pragma once
 
-#include <tuple>
+#include <ranges>
 
 namespace jell::detail {
 
-template <typename Fn, typename... Args>
-class exception_guard
-{
-public:
-    constexpr exception_guard(Fn&& fn, Args&&... args)
-        : fn_{std::forward<Fn>(fn)}
-        , args_{std::forward<Args>(args)...}
-    {}
-
-    constexpr ~exception_guard()
-    {
-        if (!released_) {
-            std::apply(std::move(fn_), std::move(args_));
-        }
-    }
-
-    constexpr void release() { released_ = true; }
-
-private:
-    bool released_{false};
-    Fn fn_;
-    std::tuple<Args...> args_;
-};
+template <typename R, typename T>
+concept container_compatible_range =
+    std::ranges::input_range<R> &&
+    std::convertible_to<std::ranges::range_reference_t<R>, T>;
 
 } // namespace jell::detail
