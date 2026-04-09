@@ -147,6 +147,26 @@ TYPED_TEST(SequenceTest, try_emplace_front_at_capacity)
     }
 }
 
+TYPED_TEST(SequenceTest, emplace_front)
+{
+    TypeParam seq;
+    if (seq.max_size() > 0) {
+        EXPECT_EQ(seq.emplace_front(this->make_value_type(100)), this->make_value_type(100));
+    }
+}
+
+TYPED_TEST(SequenceTest, emplace_front_at_capacity)
+{
+    TypeParam seq;
+    if constexpr (!is_variable<seq.traits()>) {
+        while (seq.size() < seq.capacity()) {
+            const auto expected_value = this->make_value_type(seq.size());
+            EXPECT_EQ(seq.emplace_front(this->make_value_type(seq.size())), expected_value);
+        }
+        EXPECT_THROW(seq.emplace_front(this->make_value_type(100)), std::bad_alloc);
+    }
+}
+
 TYPED_TEST(SequenceTest, unchecked_emplace_back)
 {
     TypeParam seq;
@@ -176,5 +196,25 @@ TYPED_TEST(SequenceTest, try_emplace_back_at_capacity)
             EXPECT_NE(seq.try_emplace_back(this->make_value_type(0)), nullptr);
         }
         EXPECT_EQ(seq.try_emplace_back(this->make_value_type(100)), nullptr);
+    }
+}
+
+TYPED_TEST(SequenceTest, emplace_back)
+{
+    TypeParam seq;
+    if (seq.max_size() > 0) {
+        EXPECT_EQ(seq.emplace_back(this->make_value_type(100)), this->make_value_type(100));
+    }
+}
+
+TYPED_TEST(SequenceTest, emplace_back_at_capacity)
+{
+    TypeParam seq;
+    if constexpr (!is_variable<seq.traits()>) {
+        while (seq.size() < seq.capacity()) {
+            const auto expected_value = this->make_value_type(seq.size());
+            EXPECT_EQ(seq.emplace_back(this->make_value_type(seq.size())), expected_value);
+        }
+        EXPECT_THROW(seq.emplace_back(this->make_value_type(100)), std::bad_alloc);
     }
 }

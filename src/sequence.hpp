@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <limits>
 
 namespace jell {
 
@@ -57,6 +58,16 @@ public:
     ~sequence() { std::ranges::destroy(begin(), end()); }
 
     static constexpr const traits_type& traits() noexcept { return traits_; }
+
+    static constexpr size_type max_size()
+    {
+        if constexpr (sequence_traits::is_variable<Traits>) {
+            return std::min(std::numeric_limits<size_type>::max(),
+                            std::numeric_limits<std::size_t>::max() / sizeof(value_type));
+        } else {
+            return Traits.capacity;
+        }
+    }
 
     constexpr size_type       capacity() const { return storage_.capacity(); }
     constexpr bool            empty()    const { return storage_.last() == storage_.first(); }
@@ -130,6 +141,25 @@ public:
         return std::addressof(unchecked_emplace_front(std::forward<Args>(args)...));
     }
 
+    /// Prepends a new element to the front of the container.
+    ///
+    /// For `location::back` sequences, no iterators or references are invalidated, except begin(). For other sequences,
+    /// all iterators and references are invalidated.
+    ///
+    /// @param args Arguments to forward to the constructor of the element. 
+    /// @return A reference to the inserted element.
+    /// @exception `std::bad_alloc` if additional capacity cannot be allocated.
+    ///            Any exception thrown by initialization of the inserted element, or while moving other elements. If an
+    ///            exception is thrown for any reason, this function has no effect for `location::back` sequences
+    ///            (strong exception guarantee), and leaves the sequence in a valid state for other sequence types
+    ///            (basic exception guarantee).
+    template <typename... Args>
+    constexpr reference emplace_front(Args&&... args)
+    {
+        ensure_can_grow_by(1);
+        return unchecked_emplace_front(std::forward<Args>(args)...);
+    }
+
     /// Appends a new element to the back of the container.
     ///
     /// Before the call to this function `size() < capacity()` must be true. Otherwise, the behavior is undefined.
@@ -184,6 +214,25 @@ public:
         return std::addressof(unchecked_emplace_back(std::forward<Args>(args)...));
     }
 
+    /// Append a new element to the back of the container.
+    ///
+    /// For `location::front` sequences, no iterators or references are invalidated, except end(). For other sequences,
+    /// all iterators and references are invalidated.
+    ///
+    /// @param args Arguments to forward to the constructor of the element. 
+    /// @return A reference to the inserted element.
+    /// @exception `std::bad_alloc` if additional capacity cannot be allocated.
+    ///            Any exception thrown by initialization of the inserted element, or while moving other elements. If an
+    ///            exception is thrown for any reason, this function has no effect for `location::front` sequences
+    ///            (strong exception guarantee), and leaves the sequence in a valid state for other sequence types
+    ///            (basic exception guarantee).
+    template <typename... Args>
+    constexpr reference emplace_back(Args&&... args)
+    {
+        ensure_can_grow_by(1);
+        return unchecked_emplace_back(std::forward<Args>(args)...);
+    }
+
     void pop_front()
     {
         if constexpr (sequence_traits::is_front<Traits>) {
@@ -222,6 +271,17 @@ private:
     constexpr size_type data_index(const_pointer pos) const
     {
         return static_cast<size_type>(std::distance(storage_.data(0), pos));
+    }
+
+    constexpr void ensure_can_grow_by(size_type n)
+    {
+        if (capacity() - size() < n) {
+            if constexpr (sequence_traits::is_variable<Traits>) {
+                static_assert(false, "Not implemented");
+            } else {
+                throw std::bad_alloc();
+            }
+        }
     }
 
     constexpr void rotate_left(pointer from, pointer to)
