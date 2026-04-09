@@ -77,7 +77,12 @@ public:
     constexpr const_reference back()     const { return *(std::prev(data_end())); }
 
     /// Appends a new element to the front of the container.
+    ///
     /// Before the call to this function `size() < capacity()` must be true. Otherwise, the behavior is undefined.
+    ///
+    /// For `location::back` sequences, no iterators or references are invalidated, except begin(). For other sequences,
+    /// all iterators and references are invalidated.
+    ///
     /// @param args Arguments to forward to the constructor of the element. 
     /// @return A reference to the inserted element.
     /// @exception Any exception thrown by initialization of the inserted element, or while moving other elements. If an
@@ -104,7 +109,12 @@ public:
     }
 
     /// Appends a new element to the back of the container.
+    ///
     /// Before the call to this function `size() < capacity()` must be true. Otherwise, the behavior is undefined.
+    ///
+    /// For `location::front` sequences, no iterators or references are invalidated, except end(). For other sequences,
+    /// all iterators and references are invalidated.
+    ///
     /// @param args Arguments to forward to the constructor of the element. 
     /// @return A reference to the inserted element.
     /// @exception Any exception thrown by initialization of the inserted element, or while moving other elements. If an
