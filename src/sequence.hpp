@@ -29,6 +29,7 @@
 #include "detail/traits.hpp"
 
 #include <algorithm>
+#include <initializer_list>
 #include <iterator>
 #include <limits>
 
@@ -58,39 +59,46 @@ public:
     constexpr explicit sequence(size_type count);
     constexpr sequence(size_type count, const value_type& value);
 
-    template <class InputIt>
-    constexpr sequence(InputIt first, InputIt last)
+    template <std::input_iterator Iterator, std::input_iterator Sentinel>
+    constexpr sequence(Iterator first, Sentinel last)
     {
-        if constexpr (std::random_access_iterator<InputIt>) {
+        if constexpr (std::random_access_iterator<Iterator>) {
             ensure_can_grow_by(std::distance(first, last));
         }
 
         detail::exception_guard guard{&sequence::destroy_all, this};
-        if constexpr (std::random_access_iterator<InputIt>) {
+        if constexpr (std::random_access_iterator<Iterator>) {
             for (; first != last; ++first) {
-                unchecked_emplace_back(*first);
+                unchecked_emplace_native(*first);
             }
         } else {
             for (; first != last; ++first) {
-                emplace_back(*first);
+                emplace_native(*first);
             }
         }
         guard.release();
     }
 
     template <detail::container_compatible_range<value_type> Range>
-    constexpr sequence(std::from_range_t, Range&& rg);
+    constexpr sequence(std::from_range_t, Range&& rg)
+        : sequence(std::ranges::begin(rg), std::ranges::end(rg))
+    {
+    }
+
     constexpr sequence(const sequence& other);
     constexpr sequence(sequence&& other)
         noexcept(max_size() == 0 || std::is_nothrow_move_constructible_v<value_type>);
-    constexpr sequence(std::initializer_list<value_type> init);
+    
+    constexpr sequence(std::initializer_list<value_type> init)
+        : sequence(init.begin(), init.end())
+    {}
 
     constexpr ~sequence() requires std::is_trivially_destructible_v<value_type> = default;
     constexpr ~sequence() { std::ranges::destroy(begin(), end()); }
 
     static constexpr const traits_type& traits() noexcept { return traits_; }
 
-    static constexpr size_type max_size()
+    [[nodiscard]] static constexpr size_type max_size()
     {
         if constexpr (sequence_traits::is_variable<Traits>) {
             return std::min(std::numeric_limits<size_type>::max(),
@@ -100,32 +108,37 @@ public:
         }
     }
 
-    static constexpr size_type capacity() requires (!sequence_traits::is_variable<Traits>) { return Traits.capacity; }
-    constexpr size_type capacity() const { return storage_.capacity(); }
+    [[nodiscard]] static constexpr size_type capacity()
+        requires (!sequence_traits::is_variable<Traits>)
+    {
+        return Traits.capacity;
+    }
 
-    constexpr bool            empty()    const { return storage_.last() == storage_.first(); }
-    constexpr size_type       size()     const { return storage_.last() - storage_.first(); }
-    constexpr pointer         data()           { return data_begin(); }
-    constexpr const_pointer   data()     const { return data_begin(); }
+    [[nodiscard]] constexpr size_type       capacity() const { return storage_.capacity(); }
 
-    constexpr iterator        begin()          { return data_begin(); }
-    constexpr const_iterator  begin()    const { return data_begin(); }
-    constexpr const_iterator  cbegin()   const { return data_begin(); }
-    constexpr iterator        end()            { return data_end(); }
-    constexpr const_iterator  end()      const { return data_end(); }
-    constexpr const_iterator  cend()     const { return data_end(); }
+    [[nodiscard]] constexpr bool            empty()    const { return storage_.last() == storage_.first(); }
+    [[nodiscard]] constexpr size_type       size()     const { return storage_.last() - storage_.first(); }
+    [[nodiscard]] constexpr pointer         data()           { return data_begin(); }
+    [[nodiscard]] constexpr const_pointer   data()     const { return data_begin(); }
 
-    constexpr reference       front()          { return *data_begin(); }
-    constexpr const_reference front()    const { return *data_begin(); }
-    constexpr reference       back()           { return *(std::prev(data_end())); }
-    constexpr const_reference back()     const { return *(std::prev(data_end())); }
+    [[nodiscard]] constexpr iterator        begin()          { return data_begin(); }
+    [[nodiscard]] constexpr const_iterator  begin()    const { return data_begin(); }
+    [[nodiscard]] constexpr const_iterator  cbegin()   const { return data_begin(); }
+    [[nodiscard]] constexpr iterator        end()            { return data_end(); }
+    [[nodiscard]] constexpr const_iterator  end()      const { return data_end(); }
+    [[nodiscard]] constexpr const_iterator  cend()     const { return data_end(); }
+
+    [[nodiscard]] constexpr reference       front()          { return *data_begin(); }
+    [[nodiscard]] constexpr const_reference front()    const { return *data_begin(); }
+    [[nodiscard]] constexpr reference       back()           { return *(std::prev(data_end())); }
+    [[nodiscard]] constexpr const_reference back()     const { return *(std::prev(data_end())); }
 
     /// Prepends a new element to the front of the container.
     ///
     /// Before the call to this function `size() < capacity()` must be true. Otherwise, the behavior is undefined.
     ///
-    /// For `location::back` sequences, no iterators or references are invalidated, except begin(). For other sequences,
-    /// all iterators and references are invalidated.
+    /// For `location::back` sequences, no iterators or references are invalidated, except `begin()`. For other
+    /// sequences, all iterators and references are invalidated.
     ///
     /// @param args Arguments to forward to the constructor of the element. 
     /// @return A reference to the inserted element.
@@ -134,7 +147,7 @@ public:
     ///            (strong exception guarantee), and leaves the sequence in a valid state for other sequence types
     ///            (basic exception guarantee).
     template <typename... Args>
-    constexpr reference unchecked_emplace_front(Args&&... args)
+    [[maybe_unused]] constexpr reference unchecked_emplace_front(Args&&... args)
     {
         if constexpr (sequence_traits::is_middle<Traits>) {
             if (storage_.first() == 0) {
@@ -156,8 +169,8 @@ public:
     ///
     /// If `size() == capacity()`, there are no effects. Otherwise, the new element is prepended.
     ///
-    /// For `location::back` sequences, no iterators or references are invalidated, except begin(). For other sequences,
-    /// all iterators and references are invalidated.
+    /// For `location::back` sequences, no iterators or references are invalidated, except `begin()`. For other
+    /// sequences, all iterators and references are invalidated.
     ///
     /// @param args Arguments to forward to the constructor of the element. 
     /// @return A pointer to the inserted element if `size() < capacity()`, `nullptr` otherwise.
@@ -166,7 +179,7 @@ public:
     ///            (strong exception guarantee), and leaves the sequence in a valid state for other sequence types
     ///            (basic exception guarantee).
     template <typename... Args>
-    constexpr pointer try_emplace_front(Args&&... args)
+    [[nodiscard]] constexpr pointer try_emplace_front(Args&&... args)
     {
         if (size() == capacity()) {
             return nullptr;
@@ -176,9 +189,6 @@ public:
 
     /// Prepends a new element to the front of the container.
     ///
-    /// For `location::back` sequences, no iterators or references are invalidated, except begin(). For other sequences,
-    /// all iterators and references are invalidated.
-    ///
     /// @param args Arguments to forward to the constructor of the element. 
     /// @return A reference to the inserted element.
     /// @exception `std::bad_alloc` if additional capacity cannot be allocated.
@@ -187,7 +197,7 @@ public:
     ///            (strong exception guarantee), and leaves the sequence in a valid state for other sequence types
     ///            (basic exception guarantee).
     template <typename... Args>
-    constexpr reference emplace_front(Args&&... args)
+    [[maybe_unused]] constexpr reference emplace_front(Args&&... args)
     {
         ensure_can_grow_by(1);
         return unchecked_emplace_front(std::forward<Args>(args)...);
@@ -197,8 +207,8 @@ public:
     ///
     /// Before the call to this function `size() < capacity()` must be true. Otherwise, the behavior is undefined.
     ///
-    /// For `location::front` sequences, no iterators or references are invalidated, except end(). For other sequences,
-    /// all iterators and references are invalidated.
+    /// For `location::front` sequences, no iterators or references are invalidated, except `end()`. For other
+    /// sequences, all iterators and references are invalidated.
     ///
     /// @param args Arguments to forward to the constructor of the element. 
     /// @return A reference to the inserted element.
@@ -207,7 +217,7 @@ public:
     ///            (strong exception guarantee), and leaves the sequence in a valid state for other sequence types
     ///            (basic exception guarantee).
     template <typename... Args>
-    constexpr reference unchecked_emplace_back(Args&&... args)
+    [[maybe_unused]] constexpr reference unchecked_emplace_back(Args&&... args)
     {
         if constexpr (sequence_traits::is_middle<Traits>) {
             if (storage_.last() == capacity()) {
@@ -229,8 +239,8 @@ public:
     ///
     /// If `size() == capacity()`, there are no effects. Otherwise, the new element is appended.
     ///
-    /// For `location::front` sequences, no iterators or references are invalidated, except end(). For other sequences,
-    /// all iterators and references are invalidated.
+    /// For `location::front` sequences, no iterators or references are invalidated, except `end()`. For other
+    /// sequences, all iterators and references are invalidated.
     ///
     /// @param args Arguments to forward to the constructor of the element. 
     /// @return A pointer to the inserted element if `size() < capacity()`, `nullptr` otherwise.
@@ -239,7 +249,7 @@ public:
     ///            (strong exception guarantee), and leaves the sequence in a valid state for other sequence types
     ///            (basic exception guarantee).
     template <typename... Args>
-    constexpr pointer try_emplace_back(Args&&... args)
+    [[nodiscard]] constexpr pointer try_emplace_back(Args&&... args)
     {
         if (size() == capacity()) {
             return nullptr;
@@ -249,9 +259,6 @@ public:
 
     /// Append a new element to the back of the container.
     ///
-    /// For `location::front` sequences, no iterators or references are invalidated, except end(). For other sequences,
-    /// all iterators and references are invalidated.
-    ///
     /// @param args Arguments to forward to the constructor of the element. 
     /// @return A reference to the inserted element.
     /// @exception `std::bad_alloc` if additional capacity cannot be allocated.
@@ -260,10 +267,83 @@ public:
     ///            (strong exception guarantee), and leaves the sequence in a valid state for other sequence types
     ///            (basic exception guarantee).
     template <typename... Args>
-    constexpr reference emplace_back(Args&&... args)
+    [[maybe_unused]] constexpr reference emplace_back(Args&&... args)
     {
         ensure_can_grow_by(1);
         return unchecked_emplace_back(std::forward<Args>(args)...);
+    }
+
+    /// Appends or prepends a new element to the container, using its native direction. `location::back` sequences will
+    /// prepend to the front of the container, `location::front` and `location::middle` sequences will append to the
+    /// back of the container.
+    ///
+    /// Before the call to this function `size() < capacity()` must be true. Otherwise, the behavior is undefined.
+    ///
+    /// For `location::front` sequences, the `end()` iterator is invalidated. For `location::back` sequences, the
+    /// `begin()` iterator is invalidated. For `location::middle` sequences, all iterators and references are
+    /// invalidated.
+    ///
+    /// @param args Arguments to forward to the constructor of the element. 
+    /// @return A reference to the inserted element.
+    /// @exception Any exception thrown by initialization of the inserted element, or while moving other elements. If an
+    ///            exception is thrown for any reason, this function has no effect for `location::front` and
+    ///            `location::back` sequences (strong exception guarantee), and leaves the sequence in a valid state for
+    ///            `location::middle` sequences (basic exception guarantee).
+    template <typename... Args>
+    [[maybe_unused]] constexpr reference unchecked_emplace_native(Args&&... args)
+    {
+        if constexpr (sequence_traits::is_back<Traits>) {
+            return unchecked_emplace_front(std::forward<Args>(args)...);
+        } else {
+            return unchecked_emplace_back(std::forward<Args>(args)...);
+        }
+    }
+
+    /// Conditionally appends or prepends a new element to the container, using its native direction. `location::back`
+    /// sequences will prepend to the front of the container, `location::front` and `location::middle` sequences will
+    /// append to the back of the container.
+    ///
+    /// If `size() == capacity()`, there are no effects. Otherwise, the new element is appended.
+    ///
+    /// For `location::front` sequences, the `end()` iterator is invalidated. For `location::back` sequences, the
+    /// `begin()` iterator is invalidated. For `location::middle` sequences, all iterators and references are
+    /// invalidated.
+    ///
+    /// @param args Arguments to forward to the constructor of the element. 
+    /// @return A reference to the inserted element.
+    /// @exception Any exception thrown by initialization of the inserted element, or while moving other elements. If an
+    ///            exception is thrown for any reason, this function has no effect for `location::front` and
+    ///            `location::back` sequences (strong exception guarantee), and leaves the sequence in a valid state for
+    ///            `location::middle` sequences (basic exception guarantee).
+    template <typename... Args>
+    [[nodiscard]] constexpr pointer try_emplace_native(Args&&... args)
+    {
+        if constexpr (sequence_traits::is_back<Traits>) {
+            return try_emplace_front(std::forward<Args>(args)...);
+        } else {
+            return try_emplace_back(std::forward<Args>(args)...);
+        }
+    }
+
+    /// Appends or prepends a new element to the container, using its native direction. `location::back` sequences will
+    /// prepend to the front of the container, `location::front` and `location::middle` sequences will append to the
+    /// back of the container.
+    ///
+    /// @param args Arguments to forward to the constructor of the element. 
+    /// @return A reference to the inserted element.
+    /// @exception `std::bad_alloc` if additional capacity cannot be allocated.
+    ///            Any exception thrown by initialization of the inserted element, or while moving other elements. If an
+    ///            exception is thrown for any reason, this function has no effect for `location::front` and
+    ///            `location::back` sequences (strong exception guarantee), and leaves the sequence in a valid state for
+    ///            `location::middle` sequences (basic exception guarantee).
+    template <typename... Args>
+    [[maybe_unused]] constexpr reference emplace_native(Args&&... args)
+    {
+        if constexpr (sequence_traits::is_back<Traits>) {
+            return emplace_front(std::forward<Args>(args)...);
+        } else {
+            return emplace_back(std::forward<Args>(args)...);
+        }
     }
 
     constexpr void pop_front()
@@ -294,14 +374,14 @@ private:
     using range_guard = detail::range_guard<T>;
     using storage_type = detail::storage<T, Traits>;
 
-    constexpr pointer       data_begin()               { return storage_.data(storage_.first()); }
-    constexpr const_pointer data_begin()         const { return storage_.data(storage_.first()); }
-    constexpr pointer       data_end()                 { return storage_.data(storage_.last()); }
-    constexpr const_pointer data_end()           const { return storage_.data(storage_.last()); }
-    constexpr pointer       data_at(size_type i)       { return storage_.data(i); }
-    constexpr const_pointer data_at(size_type i) const { return storage_.data(i); }
+    [[nodiscard]] constexpr pointer       data_begin()               { return storage_.data(storage_.first()); }
+    [[nodiscard]] constexpr const_pointer data_begin()         const { return storage_.data(storage_.first()); }
+    [[nodiscard]] constexpr pointer       data_end()                 { return storage_.data(storage_.last()); }
+    [[nodiscard]] constexpr const_pointer data_end()           const { return storage_.data(storage_.last()); }
+    [[nodiscard]] constexpr pointer       data_at(size_type i)       { return storage_.data(i); }
+    [[nodiscard]] constexpr const_pointer data_at(size_type i) const { return storage_.data(i); }
 
-    constexpr size_type data_index(const_pointer pos) const
+    [[nodiscard]] constexpr size_type data_index(const_pointer pos) const
     {
         return static_cast<size_type>(std::distance(storage_.data(0), pos));
     }
@@ -366,7 +446,7 @@ private:
         std::ranges::destroy(old_begin, first);
     }
 
-    constexpr range_guard uninitialized_move(pointer from, pointer to, pointer dst)
+    [[nodiscard]] constexpr range_guard uninitialized_move(pointer from, pointer to, pointer dst)
     {
         range_guard range{dst, dst};
         for (; from != to; ++range.last, ++from) {

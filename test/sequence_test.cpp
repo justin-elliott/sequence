@@ -34,12 +34,16 @@
 using namespace jell;
 using namespace jell::sequence_traits;
 
+const std::size_t default_size{32};
+
 template <typename T>
 class SequenceTest : public testing::Test
 {
 protected:
     using value_type = T::value_type;
     using size_type = T::size_type;
+
+    static const std::size_t value_count = (is_variable<T::traits()>) ? default_size : T::max_size();
 
     static constexpr value_type make_value_type(size_type value)
     {
@@ -52,25 +56,23 @@ protected:
 
     static constexpr auto values()
     {
-        return std::views::iota(size_type{100})
+        return std::views::iota(size_type{100}, static_cast<size_type>(100 + value_count))
              | std::views::transform([](size_type i) { return make_value_type(i); });
     }
 
-    static constexpr auto values(size_type count)
+    struct reversed_if_front_t : public std::ranges::range_adaptor_closure<reversed_if_front_t>
     {
-        return values() | std::views::take(count);
-    }
-
-    struct to_vector_t : std::ranges::range_adaptor_closure<to_vector_t>
-    {
-        template <std::ranges::viewable_range R>
-        constexpr std::vector<value_type> operator()(R&& r) const
+        constexpr auto operator()(auto&& rg) const
         {
-            return std::forward<R>(r) | std::ranges::to<std::vector<value_type>>();
+            if constexpr (is_back<T::traits()>) {
+                return rg | std::views::reverse;
+            } else {
+                return rg;
+            }
         }
     };
 
-    static constexpr to_vector_t to_vector() { return to_vector_t{}; }
+    constexpr reversed_if_front_t reversed_if_front() { return reversed_if_front_t{}; }
 };
 
 struct MoveOnly
@@ -106,8 +108,6 @@ struct std::formatter<MoveOnly>
     }
 };
 
-const std::size_t default_size{32};
-
 using sequence_types = testing::Types<
     sequence<double, inplace_t{0}>,
     sequence<std::uint16_t, inplace_t{default_size, sequence_traits::location::front}>,
@@ -128,22 +128,36 @@ TYPED_TEST(SequenceTest, default_construct)
 
 TYPED_TEST(SequenceTest, construct_iterators)
 {
-    const auto n_values = is_variable<TypeParam::traits()> ? default_size : TypeParam::max_size();
-    const auto expected_values = this->values(n_values);
-    auto values = this->values(n_values) | this->to_vector();
-    TypeParam seq(std::make_move_iterator(values.begin()),
-                  std::make_move_iterator(values.end()));
-    EXPECT_TRUE(std::ranges::equal(seq, expected_values))
-        << std::format("{} != {}", seq, expected_values);
+    auto values = this->values() | std::ranges::to<std::vector>();
+    TypeParam seq(std::make_move_iterator(std::ranges::begin(values)),
+                  std::make_move_iterator(std::ranges::end(values)));
+    EXPECT_TRUE(std::ranges::equal(seq, this->values() | this->reversed_if_front()))
+        << std::format("{} != {}", seq, this->values() | this->reversed_if_front());
+}
+
+TYPED_TEST(SequenceTest, construct_range)
+{
+    TypeParam seq(std::from_range, this->values() | std::views::as_rvalue);
+    EXPECT_TRUE(std::ranges::equal(seq, this->values() | this->reversed_if_front()))
+        << std::format("{} != {}", seq, this->values() | this->reversed_if_front());
+}
+
+TYPED_TEST(SequenceTest, construct_initializer_list)
+{
+    if constexpr (TypeParam::max_size() >= 5 && std::is_copy_assignable_v<typename TypeParam::value_type>) {
+        const auto values = this->values() | std::views::take(5) | std::ranges::to<std::vector>();
+        TypeParam seq{values[0], values[1], values[2], values[3], values[4]};
+        EXPECT_TRUE(std::ranges::equal(seq, values | this->reversed_if_front()))
+            << std::format("{} != {}", seq, values | this->reversed_if_front());
+    }
 }
 
 TYPED_TEST(SequenceTest, unchecked_emplace_front)
 {
     TypeParam seq;
 
-    const auto n_values = is_variable<TypeParam::traits()> ? default_size : TypeParam::max_size();
-    const auto expected_emplaced = this->values(n_values);
-    const auto expected_values = expected_emplaced | std::views::reverse | this->to_vector();
+    const auto expected_emplaced = this->values();
+    const auto expected_values = expected_emplaced | std::views::reverse | std::ranges::to<std::vector>();
     auto moveable_values = this->values();
 
     for (auto [moveable_value, expected_value] : std::views::zip(moveable_values, expected_emplaced)) {
@@ -194,8 +208,7 @@ TYPED_TEST(SequenceTest, unchecked_emplace_back)
 {
     TypeParam seq;
 
-    const auto n_values = is_variable<TypeParam::traits()> ? default_size : TypeParam::max_size();
-    const auto expected_values = this->values(n_values);
+    const auto expected_values = this->values();
     auto moveable_values = this->values();
 
     for (auto [moveable_value, expected_value] : std::views::zip(moveable_values, expected_values)) {
@@ -239,5 +252,52 @@ TYPED_TEST(SequenceTest, emplace_back_at_capacity)
             EXPECT_EQ(seq.emplace_back(this->make_value_type(seq.size())), expected_value);
         }
         EXPECT_THROW(seq.emplace_back(this->make_value_type(100)), std::bad_alloc);
+    }
+}
+
+TYPED_TEST(SequenceTest, unchecked_emplace_native)
+{
+    TypeParam seq;
+    for (auto [moveable_value, expected_value] : std::views::zip(this->values(), this->values())) {
+        EXPECT_EQ(seq.unchecked_emplace_native(std::move(moveable_value)), expected_value);
+    }
+    EXPECT_TRUE(std::ranges::equal(seq, this->values() | this->reversed_if_front()))
+        << std::format("{} != {}", seq, this->values() | this->reversed_if_front());
+}
+
+TYPED_TEST(SequenceTest, try_emplace_native)
+{
+    TypeParam seq;
+    EXPECT_EQ((seq.try_emplace_native(this->make_value_type(100)) != nullptr), (seq.capacity() > 0));
+}
+
+TYPED_TEST(SequenceTest, try_emplace_native_at_capacity)
+{
+    TypeParam seq;
+    if constexpr (!is_variable<seq.traits()>) {
+        while (seq.size() < seq.capacity()) {
+            EXPECT_NE(seq.try_emplace_native(this->make_value_type(0)), nullptr);
+        }
+        EXPECT_EQ(seq.try_emplace_native(this->make_value_type(100)), nullptr);
+    }
+}
+
+TYPED_TEST(SequenceTest, emplace_native)
+{
+    TypeParam seq;
+    if (seq.max_size() > 0) {
+        EXPECT_EQ(seq.emplace_native(this->make_value_type(100)), this->make_value_type(100));
+    }
+}
+
+TYPED_TEST(SequenceTest, emplace_native_at_capacity)
+{
+    TypeParam seq;
+    if constexpr (!is_variable<seq.traits()>) {
+        while (seq.size() < seq.capacity()) {
+            const auto expected_value = this->make_value_type(seq.size());
+            EXPECT_EQ(seq.emplace_native(this->make_value_type(seq.size())), expected_value);
+        }
+        EXPECT_THROW(seq.emplace_native(this->make_value_type(100)), std::bad_alloc);
     }
 }
