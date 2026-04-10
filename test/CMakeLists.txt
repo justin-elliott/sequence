@@ -5,6 +5,7 @@ set(CMAKE_BUILD_TYPE "Debug")
 add_executable(
     SequenceTest
     sequence_test.cpp
+    detail/traits_test.cpp
 )
 target_compile_definitions(
     SequenceTest PRIVATE

@@ -56,6 +56,9 @@ struct is_capacity : std::false_type {};
 template <std::unsigned_integral Size>
 struct is_capacity<capacity<Size>> : std::true_type {};
 
+template <std::integral Size>
+struct is_capacity<Size> : std::true_type {};
+
 template <typename T>
 constexpr bool is_capacity_v = is_capacity<T>::value;
 
@@ -92,7 +95,6 @@ concept specifier_t =
        std::is_same_v<dynamic, T>
     || std::is_same_v<variable, T>
     || is_capacity_v<T>
-    || std::is_integral_v<T>
     || std::is_same_v<location, T>
     || std::is_same_v<growth, T>
     || std::is_same_v<increment, T>
@@ -183,19 +185,33 @@ struct default_capacity
     static const inline std::size_t value = 0;
 };
 
-template <specifier_t Spec, specifier_t... Tail>
-constexpr auto get_capacity(Spec spec, Tail... tail)
+constexpr default_capacity get_capacity() { return default_capacity{}; }
+
+template <specifier_t Head, specifier_t... Tail>
+constexpr auto get_capacity(Head spec, Tail... tail)
 {
-    if constexpr (is_capacity_v<Spec>) {
-        return spec;
-    } else if constexpr (std::is_integral_v<Spec>) {
+    if constexpr (std::is_integral_v<Head>) {
         return capacity{static_cast<std::size_t>(spec)};
+    } else if constexpr (is_capacity_v<Head>) {
+        return spec;
     } else {
         return get_capacity(tail...);
     }
 }
 
-constexpr auto get_capacity() { return default_capacity{}; }
+template <specifier_t Spec, specifier_t... Specifiers>
+constexpr bool has_specifier = [] {
+    if constexpr (sizeof...(Specifiers) == 0) {
+        return false;
+    } else {
+        return [](specifier_t auto head, specifier_t auto... tail) {
+            return std::is_same_v<Spec, decltype(head)> || has_specifier<Spec, decltype(tail)...>;
+        }(Specifiers{}...);
+    }
+}();
+
+template <specifier_t Spec>
+constexpr Spec get_or_default(const Spec& default_value) { return default_value; }
 
 template <specifier_t Spec, specifier_t Head, specifier_t... Tail>
 constexpr Spec get_or_default(const Spec& default_value, Head spec, Tail... tail)
@@ -207,20 +223,33 @@ constexpr Spec get_or_default(const Spec& default_value, Head spec, Tail... tail
     }
 }
 
-template <specifier_t Spec>
-constexpr Spec get_or_default(const Spec& default_value) { return default_value; }
+template <specifier_t... Specifiers>
+constexpr bool all_unique = [] {
+    if constexpr (sizeof...(Specifiers) <= 1) {
+        return true;
+    } else {
+        return [](specifier_t auto head, specifier_t auto... tail) {
+            return (!std::is_same_v<decltype(head), decltype(tail)> && ...)
+                && (!is_capacity_v<decltype(head)> || (!is_capacity_v<decltype(tail)> && ...))
+                && all_unique<decltype(tail)...>;
+        }(Specifiers{}...);
+    }
+}();
 
 template <specifier_t... Specifiers>
 constexpr auto make_traits(Specifiers... specs)
 {
+    static_assert(all_unique<Specifiers...>, "Specifiers must be unique");
     const auto cap = get_capacity(specs...);
-    const bool is_cap_defaulted = std::is_same_v<decltype(cap), default_capacity>;
+    const bool is_cap_defaulted = std::is_same_v<std::remove_cv_t<decltype(cap)>, default_capacity>;
+    const auto default_growth = (has_specifier<increment, Specifiers...> && !has_specifier<factor, Specifiers...>)
+        ? growth::linear : growth::exponential;
     return traits_t<typename decltype(cap)::size_type>{
         .dynamic   = get_or_default(dynamic{is_cap_defaulted}, specs...).value,
         .variable  = get_or_default(variable{is_cap_defaulted}, specs...).value,
         .capacity  = cap.value,
         .location  = get_or_default(location::front, specs...),
-        .growth    = get_or_default(growth::exponential, specs...),
+        .growth    = get_or_default(default_growth, specs...),
         .increment = get_or_default(increment{0}, specs...).value,
         .factor    = get_or_default(factor{1.5f}, specs...).value,
     };
