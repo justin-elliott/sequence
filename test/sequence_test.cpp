@@ -109,13 +109,13 @@ struct std::formatter<MoveOnly>
 };
 
 using sequence_types = testing::Types<
-    sequence<double, inplace_t{0}>,
-    sequence<std::uint16_t, inplace_t{default_size, sequence_traits::location::front}>,
-    sequence<std::uint16_t, inplace_t{default_size, sequence_traits::location::middle}>,
-    sequence<std::uint16_t, inplace_t{default_size, sequence_traits::location::back}>,
-    sequence<MoveOnly, inplace_t{default_size, sequence_traits::location::front}>,
-    sequence<MoveOnly, inplace_t{default_size, sequence_traits::location::middle}>,
-    sequence<MoveOnly, inplace_t{default_size, sequence_traits::location::back}>
+    sequence<double, 0>,
+    sequence<std::uint16_t, default_size>,
+    sequence<std::uint16_t, default_size, location::middle>,
+    sequence<std::uint16_t, default_size, location::back>,
+    sequence<MoveOnly, default_size>,
+    sequence<MoveOnly, default_size, location::middle>,
+    sequence<MoveOnly, default_size, location::back>
 >;
 TYPED_TEST_SUITE(SequenceTest, sequence_types);
 

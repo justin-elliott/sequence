@@ -30,6 +30,35 @@
 
 namespace jell::detail::sequence_traits {
 
+/// True if storage can be dynamically allocated.
+struct dynamic
+{
+    bool value{true};
+};
+
+/// True if capacity can grow.
+struct variable
+{
+    bool value{true};
+};
+
+/// The size of the fixed capacity (or the SBO).
+template <std::unsigned_integral Size = std::size_t>
+struct capacity
+{
+    using size_type = std::type_identity_t<Size>;
+    size_type value{0};
+};
+
+template <typename>
+struct is_capacity : std::false_type {};
+
+template <std::unsigned_integral Size>
+struct is_capacity<capacity<Size>> : std::true_type {};
+
+template <typename T>
+constexpr bool is_capacity_v = is_capacity<T>::value;
+
 /// Layout of elements in a sequence.
 enum class location : unsigned char
 {
@@ -45,6 +74,29 @@ enum class growth : unsigned char
     linear,                 ///< Linear growth.
     vector = exponential,   ///< Vector-equivalent growth.
 };
+
+/// The linear growth in elements.
+struct increment
+{
+    std::size_t value{0};
+};
+
+/// The exponential growth factor.
+struct factor
+{
+    float value{1.5f};
+};
+
+template <typename T>
+concept specifier_t =
+       std::is_same_v<dynamic, T>
+    || std::is_same_v<variable, T>
+    || is_capacity_v<T>
+    || std::is_integral_v<T>
+    || std::is_same_v<location, T>
+    || std::is_same_v<growth, T>
+    || std::is_same_v<increment, T>
+    || std::is_same_v<factor, T>;
 
 /// General traits defining a sequence.
 template <typename Traits>
@@ -81,13 +133,13 @@ struct traits_t
 {
     using size_type = std::type_identity_t<Size>; //< The type of the size member.
 
-    bool        dynamic  {true};                //< True if storage can be dynamically allocated.
-    bool        variable {true};                //< True if capacity can grow.
-    size_type   capacity {0};                   //< The size of the fixed capacity (or the SBO).
-    location    location {location::front};     //< The layout of elements.
-    growth      growth   {growth::exponential}; //< The sequence growth rate, combined with increment or factor.
-    std::size_t increment{0};                   //< The linear growth in elements (> 0).
-    float       factor   {1.5f};                //< The exponential growth factor (> 1.0).
+    bool        dynamic   = true;                //< True if storage can be dynamically allocated.
+    bool        variable  = true;                //< True if capacity can grow.
+    size_type   capacity  = 0;                   //< The size of the fixed capacity (or the SBO).
+    location    location  = location::front;     //< The layout of elements.
+    growth      growth    = growth::exponential; //< The sequence growth rate, combined with increment or factor.
+    std::size_t increment = 0;                   //< The linear growth in elements (> 0).
+    float       factor    = 1.5f;                //< The exponential growth factor (> 1.0).
 };
 
 /// Subset of traits defining an inplace sequence.
@@ -97,9 +149,9 @@ struct inplace_t
 {
     using size_type = std::type_identity_t<Size>;  //< The type of the size member.
 
-    static const bool   dynamic {false};           //< Inplace storage.
-    size_type           capacity{0};               //< The size of the fixed capacity.
-    location            location{location::front}; //< The layout of elements.
+    static const bool   dynamic  = false;           //< Inplace storage.
+    size_type           capacity = 0;               //< The size of the fixed capacity.
+    location            location = location::front; //< The layout of elements.
 };
 
 /// Check whether the traits define a variable sequence.
@@ -124,5 +176,54 @@ constexpr bool is_middle = (traits.location == location::middle);
 /// Check whether the traits define a back-to-front sequence.
 template <traits auto traits>
 constexpr bool is_back = (traits.location == location::back);
+
+struct default_capacity
+{
+    using size_type = std::size_t;
+    static const inline std::size_t value = 0;
+};
+
+template <specifier_t Spec, specifier_t... Tail>
+constexpr auto get_capacity(Spec spec, Tail... tail)
+{
+    if constexpr (is_capacity_v<Spec>) {
+        return spec;
+    } else if constexpr (std::is_integral_v<Spec>) {
+        return capacity{static_cast<std::size_t>(spec)};
+    } else {
+        return get_capacity(tail...);
+    }
+}
+
+constexpr auto get_capacity() { return default_capacity{}; }
+
+template <specifier_t Spec, specifier_t Head, specifier_t... Tail>
+constexpr Spec get_or_default(const Spec& default_value, Head spec, Tail... tail)
+{
+    if constexpr (std::is_same_v<Head, Spec>) {
+        return spec;
+    } else {
+        return get_or_default(default_value, tail...);
+    }
+}
+
+template <specifier_t Spec>
+constexpr Spec get_or_default(const Spec& default_value) { return default_value; }
+
+template <specifier_t... Specifiers>
+constexpr auto make_traits(Specifiers... specs)
+{
+    const auto cap = get_capacity(specs...);
+    const bool is_cap_defaulted = std::is_same_v<decltype(cap), default_capacity>;
+    return traits_t<typename decltype(cap)::size_type>{
+        .dynamic   = get_or_default(dynamic{is_cap_defaulted}, specs...).value,
+        .variable  = get_or_default(variable{is_cap_defaulted}, specs...).value,
+        .capacity  = cap.value,
+        .location  = get_or_default(location::front, specs...),
+        .growth    = get_or_default(growth::exponential, specs...),
+        .increment = get_or_default(increment{0}, specs...).value,
+        .factor    = get_or_default(factor{1.5f}, specs...).value,
+    };
+}
 
 } // namespace jell::detail::sequence_traits

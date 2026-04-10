@@ -37,8 +37,11 @@ namespace jell {
 
 namespace sequence_traits = detail::sequence_traits;
 
-template <typename T, sequence_traits::traits auto Traits = sequence_traits::traits_t{}>
-class sequence : private detail::storage<T, Traits>
+template <typename T, auto... Traits>
+class sequence;
+
+template <typename T, sequence_traits::traits auto Traits>
+class sequence<T, Traits>
 {
 public:
     using traits_type            = decltype(Traits);
@@ -461,6 +464,20 @@ private:
     static inline constexpr traits_type traits_{Traits};
 
     [[no_unique_address]] storage_type storage_;
+};
+
+template <typename T>
+class sequence<T> : public sequence<T, sequence_traits::traits_t{}>
+{
+public:
+    using sequence<T, sequence_traits::traits_t{}>::sequence;
+};
+
+template <typename T, sequence_traits::specifier_t auto... Specifiers>
+class sequence<T, Specifiers...> : public sequence<T, sequence_traits::make_traits(Specifiers...)>
+{
+public:
+    using sequence<T, sequence_traits::make_traits(Specifiers...)>::sequence;
 };
 
 } // namespace jell
