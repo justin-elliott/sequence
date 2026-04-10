@@ -94,15 +94,18 @@ public:
     {}
 
     constexpr ~sequence() requires std::is_trivially_destructible_v<value_type> = default;
-    constexpr ~sequence() { std::ranges::destroy(begin(), end()); }
+    constexpr ~sequence() { destroy_all(); }
 
     static constexpr const traits_type& traits() noexcept { return traits_; }
 
     [[nodiscard]] static constexpr size_type max_size()
     {
         if constexpr (sequence_traits::is_variable<Traits>) {
-            return std::min(std::numeric_limits<size_type>::max(),
-                            std::numeric_limits<std::size_t>::max() / sizeof(value_type));
+            const auto max_repr = static_cast<std::size_t>(
+                std::numeric_limits<difference_type>::max() / sizeof(value_type));
+            return (max_repr > std::numeric_limits<size_type>::max())
+                ? std::numeric_limits<size_type>::max()
+                : static_cast<size_type>(max_repr);
         } else {
             return Traits.capacity;
         }
