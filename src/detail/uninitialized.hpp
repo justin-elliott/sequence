@@ -34,8 +34,22 @@ union uninitialized
     constexpr uninitialized() noexcept requires std::is_trivially_constructible_v<T> = default;
     constexpr uninitialized() noexcept {}
 
+    constexpr uninitialized(const uninitialized&) noexcept requires std::is_trivially_copy_constructible_v<T> = default;
+    constexpr uninitialized(const uninitialized&) noexcept {}
+
+    constexpr uninitialized(uninitialized&&) noexcept requires std::is_trivially_move_constructible_v<T> = default;
+    constexpr uninitialized(uninitialized&&) noexcept {}
+
     constexpr ~uninitialized() requires std::is_trivially_destructible_v<T> = default;
     constexpr ~uninitialized() {}
+
+    constexpr uninitialized& operator=(const uninitialized&) noexcept
+        requires std::is_trivially_copy_assignable_v<T> = default;
+    constexpr uninitialized& operator=(const uninitialized&) noexcept { return *this; }
+
+    constexpr uninitialized& operator=(uninitialized&&) noexcept
+        requires std::is_trivially_move_assignable_v<T> = default;
+    constexpr uninitialized& operator=(uninitialized&&) noexcept { return *this; }
 
     T value;
 };

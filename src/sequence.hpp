@@ -112,7 +112,7 @@ public:
 
     constexpr sequence(const sequence& other) noexcept
             requires (!Traits.dynamic && !sequence_traits::is_variable<Traits>
-                      && std::is_trivially_copy_constructible_v<storage_type>)
+                      && std::is_trivially_copy_constructible_v<value_type>)
         = default;
 
     constexpr sequence(const sequence& other)
@@ -138,7 +138,7 @@ public:
     
     constexpr sequence(sequence&& other) noexcept
             requires (!Traits.dynamic && !sequence_traits::is_variable<Traits>
-                      && std::is_trivially_move_constructible_v<storage_type>)
+                      && std::is_trivially_move_constructible_v<value_type>)
         = default;
     
     constexpr sequence(sequence&& other)
@@ -170,6 +170,64 @@ public:
 
     constexpr ~sequence() requires std::is_trivially_destructible_v<value_type> = default;
     constexpr ~sequence() { destroy_all(); }
+
+    constexpr sequence& operator=(const sequence&) noexcept
+            requires (!Traits.dynamic && !sequence_traits::is_variable<Traits>
+                      && std::is_trivially_copy_assignable_v<value_type>)
+        = default;
+
+    constexpr sequence& operator=(const sequence& other)
+    {
+        if (this != std::addressof(other)) {
+            clear();
+            initialize_for_size(other.size());
+
+            if constexpr (std::is_trivially_copy_assignable_v<value_type>) {
+                static_assert(false, "Not implemented");
+            } else {
+                if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
+                    for (auto it = other.begin(); it != other.end(); ++it) {
+                        unchecked_emplace_back(*it);    
+                    }
+                } else if constexpr (sequence_traits::is_back<Traits>) {
+                    for (auto it = other.rbegin(); it != other.rend(); ++it) {
+                        unchecked_emplace_front(*it);
+                    }
+                }
+            }
+        }
+        return *this;
+    }
+
+    constexpr sequence& operator=(sequence&&) noexcept
+            requires (!Traits.dynamic && !sequence_traits::is_variable<Traits>
+                      && std::is_trivially_move_assignable_v<value_type>)
+        = default;
+
+    constexpr sequence& operator=(sequence&& other)
+    {
+        if (this != std::addressof(other)) {
+            clear();
+            initialize_for_size(other.size());
+
+            if constexpr (std::is_trivially_move_assignable_v<value_type>) {
+                static_assert(false, "Not implemented");
+            } else {
+                if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
+                    for (auto it = other.begin(); it != other.end(); ++it) {
+                        unchecked_emplace_back(std::move(*it));    
+                    }
+                } else if constexpr (sequence_traits::is_back<Traits>) {
+                    for (auto it = other.rbegin(); it != other.rend(); ++it) {
+                        unchecked_emplace_front(std::move(*it));
+                    }
+                }
+            }
+        }
+        return *this;
+    }
+
+    constexpr sequence& operator=(std::initializer_list<value_type> init);
 
     static constexpr const traits_type& traits() noexcept { return traits_; }
 
@@ -452,6 +510,15 @@ public:
             std::prev(data_end())->~value_type();
             storage_.last(storage_.last() - 1);
         }
+    }
+
+    /// Erases all elements from the container. After this call, `size()` returns zero.
+    /// Invalidates any references, pointers, and iterators referring to contained elements. Any past-the-end iterators
+    /// are also invalidated.
+    constexpr void clear() noexcept
+    {
+        destroy_all();
+        storage_.reset();
     }
 
 private:

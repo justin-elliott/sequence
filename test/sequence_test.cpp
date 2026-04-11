@@ -97,20 +97,6 @@ struct MoveOnly
     std::size_t value = error_value;
 };
 
-template <>
-struct std::formatter<MoveOnly>
-{
-    constexpr auto parse(auto&& ctx) { return ctx.begin(); }
-
-    auto format(const MoveOnly& move_only, auto&& ctx) const
-    {
-        if (move_only.value == MoveOnly::error_value) {
-            return std::format_to(ctx.out(), "(/)");
-        }
-        return std::format_to(ctx.out(), "{}", move_only.value);
-    }
-};
-
 struct NonTrivial
 {
     constexpr NonTrivial(std::size_t value = 0) : value{value} {}
@@ -129,17 +115,23 @@ struct NonTrivial
     std::size_t value = error_value;
 };
 
-template <>
-struct std::formatter<NonTrivial>
+template <typename T>
+concept error_value_type = requires(T obj) {
+    T::error_value;
+    obj.value;
+};
+
+template <error_value_type T>
+struct std::formatter<T>
 {
     constexpr auto parse(auto&& ctx) { return ctx.begin(); }
 
-    auto format(const NonTrivial& non_trivial, auto&& ctx) const
+    auto format(const T& obj, auto&& ctx) const
     {
-        if (non_trivial.value == NonTrivial::error_value) {
+        if (obj.value == T::error_value) {
             return std::format_to(ctx.out(), "(/)");
         }
-        return std::format_to(ctx.out(), "{}", non_trivial.value);
+        return std::format_to(ctx.out(), "{}", obj.value);
     }
 };
 
@@ -236,6 +228,33 @@ TYPED_TEST(SequenceTest, construct_initializer_list)
         TypeParam seq{values[0], values[1], values[2], values[3], values[4]};
         EXPECT_TRUE(std::ranges::equal(seq, values | this->reversed_if_front()))
             << std::format("{} != {}", seq, values | this->reversed_if_front());
+    }
+}
+
+TYPED_TEST(SequenceTest, assign_copy)
+{
+    if constexpr (!std::is_copy_assignable_v<typename TypeParam::value_type>) {
+        GTEST_SKIP() << "Not copy assignable";
+    } else {
+        const TypeParam seq1(std::from_range, this->values());
+        TypeParam seq2;
+        seq2 = seq1;
+        EXPECT_TRUE(std::ranges::equal(seq1, seq2))
+            << std::format("{} != {}", seq1, seq2);
+    }
+}
+
+TYPED_TEST(SequenceTest, assign_move)
+{
+    if constexpr (!std::is_move_assignable_v<typename TypeParam::value_type>) {
+        GTEST_SKIP() << "Not move assignable";
+    } else {
+        TypeParam seq1(std::from_range, this->values());
+        TypeParam seq2;
+        seq2 = std::move(seq1);
+        const TypeParam expected(std::from_range, this->values());
+        EXPECT_TRUE(std::ranges::equal(seq2, expected))
+            << std::format("{} != {}", seq2, expected);
     }
 }
 
@@ -399,4 +418,15 @@ TYPED_TEST(SequenceTest, emplace_native_at_capacity)
         }
         EXPECT_THROW(seq.emplace_native(this->make_value_type(100)), std::bad_alloc);
     }
+}
+
+TYPED_TEST(SequenceTest, clear)
+{
+    auto values = this->values() | std::views::as_rvalue;
+    TypeParam seq(std::from_range, values);
+    EXPECT_EQ(seq.size(), std::ranges::size(values));
+
+    seq.clear();
+    EXPECT_TRUE(seq.empty());
+    EXPECT_EQ(seq.size(), 0);
 }

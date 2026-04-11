@@ -49,6 +49,7 @@ public:
     static constexpr void      first(size_type) noexcept {}
     static constexpr size_type last()           noexcept { return 0; }
     static constexpr void      last(size_type)  noexcept {}
+    static constexpr void      reset()          noexcept {}
 };
 
 /// Storage for a front inplace sequence.
@@ -66,6 +67,7 @@ public:
     static constexpr void      first(size_type)        noexcept {}
     constexpr        size_type last()            const noexcept { return last_; }
     constexpr        void      last(size_type i)       noexcept { last_ = i; }
+    constexpr        void      reset()                 noexcept { last_ = 0; }
 
 private:
     size_type last_{0};
@@ -87,6 +89,7 @@ public:
     constexpr        void      first(size_type i)      noexcept { first_ = i; }
     constexpr        size_type last()            const noexcept { return last_; }
     constexpr        void      last(size_type i)       noexcept { last_ = i; }
+    constexpr        void      reset()                 noexcept { first_ = last_ = capacity() / 2; }
 
 private:
     size_type first_{capacity() / 2};
@@ -109,6 +112,7 @@ public:
     constexpr        void      first(size_type i)      noexcept { first_ = i; }
     static constexpr size_type last()                  noexcept { return capacity(); }
     static constexpr void      last(size_type)         noexcept {}
+    constexpr        void      reset()                 noexcept { first_ = capacity(); }
 
 private:
     size_type first_{capacity()};
