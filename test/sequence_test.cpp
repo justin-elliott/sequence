@@ -126,6 +126,24 @@ TYPED_TEST(SequenceTest, default_construct)
     EXPECT_EQ(seq.size(), 0) << std::format("{}", seq);
 }
 
+TYPED_TEST(SequenceTest, construct_count)
+{
+    if constexpr (std::is_default_constructible_v<typename TypeParam::value_type>
+                  && TypeParam::max_size() >= inplace_size) {
+        TypeParam seq(inplace_size);
+        EXPECT_EQ(seq.size(), inplace_size);
+    }
+}
+
+TYPED_TEST(SequenceTest, construct_count_value)
+{
+    if constexpr (std::is_copy_constructible_v<typename TypeParam::value_type>
+                  && TypeParam::max_size() >= inplace_size) {
+        TypeParam seq(inplace_size, this->make_value_type(100));
+        EXPECT_EQ(seq.size(), inplace_size);
+    }
+}
+
 TYPED_TEST(SequenceTest, construct_iterators)
 {
     auto values = this->values() | std::ranges::to<std::vector>();

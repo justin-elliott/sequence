@@ -59,8 +59,25 @@ public:
 
     constexpr sequence() = default;
 
-    constexpr explicit sequence(size_type count);
-    constexpr sequence(size_type count, const value_type& value);
+    constexpr explicit sequence(size_type count)
+    {
+        ensure_can_grow_by(count);
+        detail::exception_guard guard{&sequence::destroy_all, this};
+        while (count-- != 0) {
+            unchecked_emplace_native();
+        }
+        guard.release();
+    }
+
+    constexpr sequence(size_type count, const value_type& value)
+    {
+        ensure_can_grow_by(count);
+        detail::exception_guard guard{&sequence::destroy_all, this};
+        while (count-- != 0) {
+            unchecked_emplace_native(value);
+        }
+        guard.release();
+    }
 
     template <std::input_iterator Iterator, std::input_iterator Sentinel>
     constexpr sequence(Iterator first, Sentinel last)
