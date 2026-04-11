@@ -59,6 +59,25 @@ TEST(TraitsTest, make_traits_capacity)
     EXPECT_EQ(make_traits(dynamic{}, variable{}, 100).capacity, 100u);
 }
 
+TEST(TraitsTest, make_traits_capacity_size_type)
+{
+    static_assert(std::is_same_v<decltype(make_traits())::size_type, std::size_t>);
+    static_assert(std::is_same_v<decltype(make_traits(100))::size_type, std::make_unsigned_t<int>>);
+    static_assert(std::is_same_v<decltype(make_traits(100U))::size_type, unsigned int>);
+    static_assert(std::is_same_v<decltype(make_traits(100L))::size_type, std::make_unsigned_t<long>>);
+    static_assert(std::is_same_v<decltype(make_traits(100UL))::size_type, unsigned long>);
+    static_assert(std::is_same_v<decltype(make_traits(100LL))::size_type, std::make_unsigned_t<long long>>);
+    static_assert(std::is_same_v<decltype(make_traits(100ULL))::size_type, unsigned long long>);
+    static_assert(std::is_same_v<decltype(make_traits(100UZ))::size_type, std::size_t>);
+    static_assert(std::is_same_v<decltype(make_traits(capacity{0}))::size_type, std::make_unsigned_t<int>>);
+    static_assert(std::is_same_v<decltype(make_traits(capacity{0L}))::size_type, std::make_unsigned_t<long>>);
+    static_assert(std::is_same_v<decltype(make_traits(capacity{0LL}))::size_type, std::make_unsigned_t<long long>>);
+    static_assert(std::is_same_v<decltype(make_traits(capacity<std::uint8_t>{0}))::size_type, std::uint8_t>);
+    static_assert(std::is_same_v<decltype(make_traits(capacity<std::uint16_t>{0}))::size_type, std::uint16_t>);
+    static_assert(std::is_same_v<decltype(make_traits(capacity<std::uint32_t>{0}))::size_type, std::uint32_t>);
+    static_assert(std::is_same_v<decltype(make_traits(capacity<std::uint64_t>{0}))::size_type, std::uint64_t>);
+}
+
 TEST(TraitsTest, make_traits_location)
 {
     EXPECT_EQ(make_traits().location, location::front);

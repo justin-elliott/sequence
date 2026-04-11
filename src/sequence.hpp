@@ -425,7 +425,7 @@ private:
 
     constexpr void move_to_left(size_type new_first) requires sequence_traits::is_middle<Traits>
     {
-        const auto uninitialized_available = storage_.first() - new_first;
+        const auto uninitialized_available = static_cast<size_type>(storage_.first() - new_first);
         const auto uninitialized_size = std::min(uninitialized_available, size());
         const auto to = std::next(data_begin(), uninitialized_size);
         auto guarded = uninitialized_move(data_begin(), to, data_at(new_first));
@@ -439,7 +439,7 @@ private:
 
     constexpr void move_to_right(size_type new_first) requires sequence_traits::is_middle<Traits>
     {
-        const auto uninitialized_available = new_first - storage_.first();
+        const auto uninitialized_available = static_cast<size_type>(new_first - storage_.first());
         const auto uninitialized_size = std::min(uninitialized_available, size());
         const auto uninitialized_end = data_at(new_first + size());
         const auto from = std::prev(data_end(), uninitialized_size);

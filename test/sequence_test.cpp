@@ -34,7 +34,7 @@
 using namespace jell;
 using namespace jell::sequence_traits;
 
-const std::size_t default_size{32};
+const std::uint8_t inplace_size = 32;
 
 template <typename T>
 class SequenceTest : public testing::Test
@@ -43,7 +43,7 @@ protected:
     using value_type = T::value_type;
     using size_type = T::size_type;
 
-    static const std::size_t value_count = (is_variable<T::traits()>) ? default_size : T::max_size();
+    static const std::size_t value_count = (is_variable<T::traits()>) ? inplace_size : T::max_size();
 
     static constexpr value_type make_value_type(size_type value)
     {
@@ -110,12 +110,12 @@ struct std::formatter<MoveOnly>
 
 using sequence_types = testing::Types<
     sequence<double, 0>,
-    sequence<std::uint16_t, default_size>,
-    sequence<std::uint16_t, default_size, location::middle>,
-    sequence<std::uint16_t, default_size, location::back>,
-    sequence<MoveOnly, default_size>,
-    sequence<MoveOnly, default_size, location::middle>,
-    sequence<MoveOnly, default_size, location::back>
+    sequence<std::uint16_t, inplace_size>,
+    sequence<std::uint16_t, inplace_size, location::middle>,
+    sequence<std::uint16_t, inplace_size, location::back>,
+    sequence<MoveOnly, inplace_size>,
+    sequence<MoveOnly, inplace_size, location::middle>,
+    sequence<MoveOnly, inplace_size, location::back>
 >;
 TYPED_TEST_SUITE(SequenceTest, sequence_types);
 

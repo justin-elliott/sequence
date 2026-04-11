@@ -26,6 +26,7 @@
 
 #include <concepts>
 #include <cstddef>
+#include <stdexcept>
 #include <type_traits>
 
 namespace jell::detail::sequence_traits {
@@ -43,12 +44,15 @@ struct variable
 };
 
 /// The size of the fixed capacity (or the SBO).
-template <std::unsigned_integral Size = std::size_t>
+template <std::unsigned_integral Size>
 struct capacity
 {
-    using size_type = std::type_identity_t<Size>;
+    using size_type = Size;
     size_type value{0};
 };
+
+template <std::integral Size>
+capacity(Size) -> capacity<std::make_unsigned_t<Size>>;
 
 template <typename>
 struct is_capacity : std::false_type {};
@@ -191,7 +195,11 @@ template <specifier_t Head, specifier_t... Tail>
 constexpr auto get_capacity(Head spec, Tail... tail)
 {
     if constexpr (std::is_integral_v<Head>) {
-        return capacity{static_cast<std::size_t>(spec)};
+        if (spec < 0) {
+            throw std::invalid_argument("Capacity must not be negative");
+        }
+        using size_type = std::make_unsigned_t<Head>;
+        return capacity<size_type>{static_cast<size_type>(spec)};
     } else if constexpr (is_capacity_v<Head>) {
         return spec;
     } else {
@@ -237,7 +245,7 @@ constexpr bool all_unique = [] {
 }();
 
 template <specifier_t... Specifiers>
-constexpr auto make_traits(Specifiers... specs)
+consteval auto make_traits(Specifiers... specs)
 {
     static_assert(all_unique<Specifiers...>, "Specifiers must be unique");
     const auto cap = get_capacity(specs...);
