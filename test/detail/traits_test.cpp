@@ -28,22 +28,6 @@
 using namespace jell;
 using namespace jell::detail::sequence_traits;
 
-// template <specifier_t... Specifiers>
-// constexpr auto make_traits(Specifiers... specs)
-// {
-//     const auto cap = get_capacity(specs...);
-//     const bool is_cap_defaulted = std::is_same_v<decltype(cap), default_capacity>;
-//     return traits_t<typename decltype(cap)::size_type>{
-//         .dynamic   = get_or_default(dynamic{is_cap_defaulted}, specs...).value,
-//         .variable  = get_or_default(variable{is_cap_defaulted}, specs...).value,
-//         .capacity  = cap.value,
-//         .location  = get_or_default(location::front, specs...),
-//         .growth    = get_or_default(growth::exponential, specs...),
-//         .increment = get_or_default(increment{0}, specs...).value,
-//         .factor    = get_or_default(factor{1.5f}, specs...).value,
-//     };
-// }
-
 TEST(TraitsTest, make_traits_dynamic)
 {
     EXPECT_TRUE(make_traits().dynamic);
