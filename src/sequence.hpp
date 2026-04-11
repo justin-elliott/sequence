@@ -43,6 +43,10 @@ class sequence;
 template <typename T, sequence_traits::traits auto Traits>
 class sequence<T, Traits>
 {
+private:
+    using range_guard = detail::range_guard<T>;
+    using storage_type = detail::storage<T, Traits>;
+
 public:
     using traits_type            = decltype(Traits);
     using value_type             = T;
@@ -105,7 +109,20 @@ public:
     {
     }
 
+    constexpr sequence(const sequence& other) noexcept
+            requires (!Traits.dynamic
+                      && !sequence_traits::is_variable<Traits>
+                      && std::is_trivially_copy_constructible_v<storage_type>)
+        = default;
+
     constexpr sequence(const sequence& other);
+    
+    constexpr sequence(sequence&& other) noexcept
+            requires (!Traits.dynamic
+                      && !sequence_traits::is_variable<Traits>
+                      && std::is_trivially_move_constructible_v<storage_type>)
+        = default;
+    
     constexpr sequence(sequence&& other)
         noexcept(max_size() == 0 || std::is_nothrow_move_constructible_v<value_type>);
     
@@ -394,9 +411,6 @@ public:
     }
 
 private:
-    using range_guard = detail::range_guard<T>;
-    using storage_type = detail::storage<T, Traits>;
-
     [[nodiscard]] constexpr pointer       data_begin()               { return storage_.data(storage_.first()); }
     [[nodiscard]] constexpr const_pointer data_begin()         const { return storage_.data(storage_.first()); }
     [[nodiscard]] constexpr pointer       data_end()                 { return storage_.data(storage_.last()); }

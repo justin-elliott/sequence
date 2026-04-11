@@ -43,7 +43,10 @@ protected:
     using value_type = T::value_type;
     using size_type = T::size_type;
 
-    static const std::size_t value_count = (is_variable<T::traits()>) ? inplace_size : T::max_size();
+    static constexpr std::size_t value_count() noexcept
+    {
+        return (is_variable<T::traits()>) ? inplace_size : T::max_size();
+    }
 
     static constexpr value_type make_value_type(size_type value)
     {
@@ -56,7 +59,7 @@ protected:
 
     static constexpr auto values()
     {
-        return std::views::iota(size_type{100}, static_cast<size_type>(100 + value_count))
+        return std::views::iota(size_type{100}, static_cast<size_type>(100 + value_count()))
              | std::views::transform([](size_type i) { return make_value_type(i); });
     }
 
@@ -128,19 +131,21 @@ TYPED_TEST(SequenceTest, default_construct)
 
 TYPED_TEST(SequenceTest, construct_count)
 {
-    if constexpr (std::is_default_constructible_v<typename TypeParam::value_type>
-                  && TypeParam::max_size() >= inplace_size) {
-        TypeParam seq(inplace_size);
-        EXPECT_EQ(seq.size(), inplace_size);
+    if constexpr (!std::is_default_constructible_v<typename TypeParam::value_type>) {
+        GTEST_SKIP() << "Not default constructible";
+    } else {
+        TypeParam seq(this->value_count());
+        EXPECT_EQ(seq.size(), this->value_count());
     }
 }
 
 TYPED_TEST(SequenceTest, construct_count_value)
 {
-    if constexpr (std::is_copy_constructible_v<typename TypeParam::value_type>
-                  && TypeParam::max_size() >= inplace_size) {
-        TypeParam seq(inplace_size, this->make_value_type(100));
-        EXPECT_EQ(seq.size(), inplace_size);
+    if constexpr (!std::is_copy_constructible_v<typename TypeParam::value_type>) {
+        GTEST_SKIP() << "Not copy constructible";
+    } else {
+        TypeParam seq(this->value_count(), this->make_value_type(100));
+        EXPECT_EQ(seq.size(), this->value_count());
     }
 }
 
@@ -160,9 +165,38 @@ TYPED_TEST(SequenceTest, construct_range)
         << std::format("{} != {}", seq, this->values() | this->reversed_if_front());
 }
 
+TYPED_TEST(SequenceTest, construct_copy)
+{
+    if constexpr (!std::is_trivially_copy_constructible_v<typename TypeParam::value_type>) {
+        GTEST_SKIP() << "Not trivially copy constructible";
+    } else {
+        const TypeParam seq1(std::from_range, this->values());
+        const TypeParam seq2(seq1);
+        EXPECT_TRUE(std::ranges::equal(seq1, seq2))
+            << std::format("{} != {}", seq1, seq2);
+    }
+}
+
+TYPED_TEST(SequenceTest, construct_move)
+{
+    if constexpr (!std::is_trivially_move_constructible_v<typename TypeParam::value_type>) {
+        GTEST_SKIP() << "Not trivially move constructible";
+    } else {
+        TypeParam seq1(std::from_range, this->values());
+        const TypeParam seq2(std::move(seq1));
+        const TypeParam expected(std::from_range, this->values());
+        EXPECT_TRUE(std::ranges::equal(seq2, expected))
+            << std::format("{} != {}", seq2, expected);
+    }
+}
+
 TYPED_TEST(SequenceTest, construct_initializer_list)
 {
-    if constexpr (TypeParam::max_size() >= 5 && std::is_copy_assignable_v<typename TypeParam::value_type>) {
+    if constexpr (!std::is_copy_assignable_v<typename TypeParam::value_type>) {
+        GTEST_SKIP() << "Not copy assignable";
+    } else if constexpr (TypeParam::max_size() < 5) {
+        GTEST_SKIP() << "Capacity too small";
+    } else {
         const auto values = this->values() | std::views::take(5) | std::ranges::to<std::vector>();
         TypeParam seq{values[0], values[1], values[2], values[3], values[4]};
         EXPECT_TRUE(std::ranges::equal(seq, values | this->reversed_if_front()))
@@ -194,7 +228,9 @@ TYPED_TEST(SequenceTest, try_emplace_front)
 TYPED_TEST(SequenceTest, try_emplace_front_at_capacity)
 {
     TypeParam seq;
-    if constexpr (!is_variable<seq.traits()>) {
+    if constexpr (is_variable<seq.traits()>) {
+        GTEST_SKIP() << "Variable capacity";
+    } else {
         while (seq.size() < seq.capacity()) {
             EXPECT_NE(seq.try_emplace_front(this->make_value_type(0)), nullptr);
         }
@@ -213,7 +249,9 @@ TYPED_TEST(SequenceTest, emplace_front)
 TYPED_TEST(SequenceTest, emplace_front_at_capacity)
 {
     TypeParam seq;
-    if constexpr (!is_variable<seq.traits()>) {
+    if constexpr (is_variable<seq.traits()>) {
+        GTEST_SKIP() << "Variable capacity";
+    } else {
         while (seq.size() < seq.capacity()) {
             const auto expected_value = this->make_value_type(seq.size());
             EXPECT_EQ(seq.emplace_front(this->make_value_type(seq.size())), expected_value);
@@ -245,7 +283,9 @@ TYPED_TEST(SequenceTest, try_emplace_back)
 TYPED_TEST(SequenceTest, try_emplace_back_at_capacity)
 {
     TypeParam seq;
-    if constexpr (!is_variable<seq.traits()>) {
+    if constexpr (is_variable<seq.traits()>) {
+        GTEST_SKIP() << "Variable capacity";
+    } else {
         while (seq.size() < seq.capacity()) {
             EXPECT_NE(seq.try_emplace_back(this->make_value_type(0)), nullptr);
         }
@@ -264,7 +304,9 @@ TYPED_TEST(SequenceTest, emplace_back)
 TYPED_TEST(SequenceTest, emplace_back_at_capacity)
 {
     TypeParam seq;
-    if constexpr (!is_variable<seq.traits()>) {
+    if constexpr (is_variable<seq.traits()>) {
+        GTEST_SKIP() << "Variable capacity";
+    } else {
         while (seq.size() < seq.capacity()) {
             const auto expected_value = this->make_value_type(seq.size());
             EXPECT_EQ(seq.emplace_back(this->make_value_type(seq.size())), expected_value);
@@ -292,7 +334,9 @@ TYPED_TEST(SequenceTest, try_emplace_native)
 TYPED_TEST(SequenceTest, try_emplace_native_at_capacity)
 {
     TypeParam seq;
-    if constexpr (!is_variable<seq.traits()>) {
+    if constexpr (is_variable<seq.traits()>) {
+        GTEST_SKIP() << "Variable capacity";
+    } else {
         while (seq.size() < seq.capacity()) {
             EXPECT_NE(seq.try_emplace_native(this->make_value_type(0)), nullptr);
         }
@@ -311,7 +355,9 @@ TYPED_TEST(SequenceTest, emplace_native)
 TYPED_TEST(SequenceTest, emplace_native_at_capacity)
 {
     TypeParam seq;
-    if constexpr (!is_variable<seq.traits()>) {
+    if constexpr (is_variable<seq.traits()>) {
+        GTEST_SKIP() << "Variable capacity";
+    } else {
         while (seq.size() < seq.capacity()) {
             const auto expected_value = this->make_value_type(seq.size());
             EXPECT_EQ(seq.emplace_native(this->make_value_type(seq.size())), expected_value);
