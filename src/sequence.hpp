@@ -179,20 +179,24 @@ public:
     constexpr sequence& operator=(const sequence& other)
     {
         if (this != std::addressof(other)) {
-            clear();
-            initialize_for_size(other.size());
+            const auto copy_count = std::min(size(), other.size());
+            if (copy_count < other.size()) {
+                ensure_can_grow_by(static_cast<std::size_t>(other.size() - copy_count));
+            }
 
-            if constexpr (std::is_trivially_copy_assignable_v<value_type>) {
-                static_assert(false, "Not implemented");
-            } else {
-                if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
-                    for (auto it = other.begin(); it != other.end(); ++it) {
-                        unchecked_emplace_back(*it);    
-                    }
-                } else if constexpr (sequence_traits::is_back<Traits>) {
-                    for (auto it = other.rbegin(); it != other.rend(); ++it) {
-                        unchecked_emplace_front(*it);
-                    }
+            if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
+                const auto other_limit = std::next(other.begin(), copy_count);
+                const auto new_end = std::copy(other.begin(), other_limit, begin());
+                storage_.last(data_index(new_end));
+                for (auto it = other_limit; it != other.end(); ++it) {
+                    unchecked_emplace_back(*it);    
+                }
+            } else if constexpr (sequence_traits::is_back<Traits>) {
+                const auto new_begin = std::prev(end(), copy_count);
+                std::copy(std::prev(other.end(), copy_count), other.end(), new_begin);
+                storage_.first(data_index(new_begin));
+                for (auto it = std::next(other.rbegin(), copy_count); it != other.rend(); ++it) {
+                    unchecked_emplace_front(*it);
                 }
             }
         }
@@ -206,23 +210,29 @@ public:
 
     constexpr sequence& operator=(sequence&& other)
         noexcept(!Traits.dynamic && !sequence_traits::is_variable<Traits>
-                 && (max_size() == 0 || std::is_nothrow_move_assignable_v<value_type>))
+                 && (max_size() == 0 || (
+                        std::is_nothrow_move_assignable_v<value_type>
+                     && std::is_nothrow_move_constructible_v<value_type>)))
     {
         if (this != std::addressof(other)) {
-            clear();
-            initialize_for_size(other.size());
+            const auto copy_count = std::min(size(), other.size());
+            if (copy_count < other.size()) {
+                ensure_can_grow_by(static_cast<std::size_t>(other.size() - copy_count));
+            }
 
-            if constexpr (std::is_trivially_move_assignable_v<value_type>) {
-                static_assert(false, "Not implemented");
-            } else {
-                if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
-                    for (auto it = other.begin(); it != other.end(); ++it) {
-                        unchecked_emplace_back(std::move(*it));    
-                    }
-                } else if constexpr (sequence_traits::is_back<Traits>) {
-                    for (auto it = other.rbegin(); it != other.rend(); ++it) {
-                        unchecked_emplace_front(std::move(*it));
-                    }
+            if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
+                const auto other_limit = std::next(other.begin(), copy_count);
+                const auto new_end = std::move(other.begin(), other_limit, begin());
+                storage_.last(data_index(new_end));
+                for (auto it = other_limit; it != other.end(); ++it) {
+                    unchecked_emplace_back(std::move(*it));    
+                }
+            } else if constexpr (sequence_traits::is_back<Traits>) {
+                const auto new_begin = std::prev(end(), copy_count);
+                std::move(std::prev(other.end(), copy_count), other.end(), new_begin);
+                storage_.first(data_index(new_begin));
+                for (auto it = std::next(other.rbegin(), copy_count); it != other.rend(); ++it) {
+                    unchecked_emplace_front(std::move(*it));
                 }
             }
         }
@@ -231,10 +241,26 @@ public:
 
     constexpr sequence& operator=(std::initializer_list<value_type> init)
     {
-        clear();
-        initialize_for_size(init.size());
-        for (auto it = init.begin(); it != init.end(); ++it) {
-            unchecked_emplace_native(*it);
+        const auto copy_count = std::min<std::size_t>(size(), init.size());
+        if (copy_count < init.size()) {
+            ensure_can_grow_by(static_cast<std::size_t>(init.size() - copy_count));
+        }
+
+        if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
+            const auto init_limit = std::next(init.begin(), copy_count);
+            const auto new_end = std::copy(init.begin(), init_limit, begin());
+            storage_.last(data_index(new_end));
+            for (auto it = init_limit; it != init.end(); ++it) {
+                unchecked_emplace_back(*it);    
+            }
+        } else if constexpr (sequence_traits::is_back<Traits>) {
+            const auto init_limit = std::next(init.begin(), copy_count);
+            const auto new_begin = std::prev(end(), copy_count);
+            std::reverse_copy(init.begin(), init_limit, new_begin);
+            storage_.first(data_index(new_begin));
+            for (auto it = init_limit; it != init.end(); ++it) {
+                unchecked_emplace_front(*it);
+            }
         }
         return *this;
     }
@@ -546,7 +572,7 @@ private:
 
     constexpr void destroy_all() { std::ranges::destroy(begin(), end()); }
 
-    constexpr void ensure_can_grow_by(size_type n)
+    constexpr void ensure_can_grow_by(std::size_t n)
     {
         if (static_cast<size_type>(capacity() - size()) < n) {
             if constexpr (sequence_traits::is_variable<Traits>) {
@@ -557,7 +583,7 @@ private:
         }
     }
 
-    constexpr void initialize_for_size(size_type n)
+    constexpr void initialize_for_size(std::size_t n)
     {
         ensure_can_grow_by(n);
     
@@ -634,6 +660,7 @@ class sequence<T> : public sequence<T, sequence_traits::traits_t{}>
 {
 public:
     using sequence<T, sequence_traits::traits_t{}>::sequence;
+    using sequence<T, sequence_traits::traits_t{}>::operator=;
 };
 
 template <typename T, sequence_traits::specifier_t auto... Specifiers>
@@ -641,6 +668,7 @@ class sequence<T, Specifiers...> : public sequence<T, sequence_traits::make_trai
 {
 public:
     using sequence<T, sequence_traits::make_traits(Specifiers...)>::sequence;
+    using sequence<T, sequence_traits::make_traits(Specifiers...)>::operator=;
 };
 
 } // namespace jell
