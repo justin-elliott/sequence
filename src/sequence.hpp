@@ -205,6 +205,8 @@ public:
         = default;
 
     constexpr sequence& operator=(sequence&& other)
+        noexcept(!Traits.dynamic && !sequence_traits::is_variable<Traits>
+                 && (max_size() == 0 || std::is_nothrow_move_assignable_v<value_type>))
     {
         if (this != std::addressof(other)) {
             clear();
@@ -227,7 +229,15 @@ public:
         return *this;
     }
 
-    constexpr sequence& operator=(std::initializer_list<value_type> init);
+    constexpr sequence& operator=(std::initializer_list<value_type> init)
+    {
+        clear();
+        initialize_for_size(init.size());
+        for (auto it = init.begin(); it != init.end(); ++it) {
+            unchecked_emplace_native(*it);
+        }
+        return *this;
+    }
 
     static constexpr const traits_type& traits() noexcept { return traits_; }
 

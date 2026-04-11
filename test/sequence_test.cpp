@@ -231,7 +231,7 @@ TYPED_TEST(SequenceTest, construct_initializer_list)
     }
 }
 
-TYPED_TEST(SequenceTest, assign_copy)
+TYPED_TEST(SequenceTest, assign_copy_initially_empty)
 {
     if constexpr (!std::is_copy_assignable_v<typename TypeParam::value_type>) {
         GTEST_SKIP() << "Not copy assignable";
@@ -244,7 +244,20 @@ TYPED_TEST(SequenceTest, assign_copy)
     }
 }
 
-TYPED_TEST(SequenceTest, assign_move)
+TYPED_TEST(SequenceTest, assign_copy_initially_nonempty)
+{
+    if constexpr (!std::is_copy_assignable_v<typename TypeParam::value_type>) {
+        GTEST_SKIP() << "Not copy assignable";
+    } else {
+        const TypeParam seq1(std::from_range, this->values());
+        TypeParam seq2(std::from_range, this->values() | std::views::take(this->value_count() / 2));
+        seq2 = seq1;
+        EXPECT_TRUE(std::ranges::equal(seq1, seq2))
+            << std::format("{} != {}", seq1, seq2);
+    }
+}
+
+TYPED_TEST(SequenceTest, assign_move_initially_empty)
 {
     if constexpr (!std::is_move_assignable_v<typename TypeParam::value_type>) {
         GTEST_SKIP() << "Not move assignable";
@@ -255,6 +268,50 @@ TYPED_TEST(SequenceTest, assign_move)
         const TypeParam expected(std::from_range, this->values());
         EXPECT_TRUE(std::ranges::equal(seq2, expected))
             << std::format("{} != {}", seq2, expected);
+    }
+}
+
+TYPED_TEST(SequenceTest, assign_move_initially_nonempty)
+{
+    if constexpr (!std::is_move_assignable_v<typename TypeParam::value_type>) {
+        GTEST_SKIP() << "Not move assignable";
+    } else {
+        TypeParam seq1(std::from_range, this->values());
+        TypeParam seq2(std::from_range, this->values() | std::views::take(this->value_count() / 2));
+        seq2 = std::move(seq1);
+        const TypeParam expected(std::from_range, this->values());
+        EXPECT_TRUE(std::ranges::equal(seq2, expected))
+            << std::format("{} != {}", seq2, expected);
+    }
+}
+
+TYPED_TEST(SequenceTest, assign_init_initially_empty)
+{
+    if constexpr (!std::is_copy_assignable_v<typename TypeParam::value_type>) {
+        GTEST_SKIP() << "Not copy assignable";
+    } else if constexpr (TypeParam::max_size() < 5) {
+        GTEST_SKIP() << "Capacity too small";
+    } else {
+        TypeParam seq;
+        const auto values = this->values() | std::views::take(5) | std::ranges::to<std::vector>();
+        seq = {values[0], values[1], values[2], values[3], values[4]};
+        EXPECT_TRUE(std::ranges::equal(seq, values | this->reversed_if_front()))
+            << std::format("{} != {}", seq, values | this->reversed_if_front());
+    }
+}
+
+TYPED_TEST(SequenceTest, assign_init_initially_nonempty)
+{
+    if constexpr (!std::is_copy_assignable_v<typename TypeParam::value_type>) {
+        GTEST_SKIP() << "Not copy assignable";
+    } else if constexpr (TypeParam::max_size() < 5) {
+        GTEST_SKIP() << "Capacity too small";
+    } else {
+        TypeParam seq(std::from_range, this->values());
+        const auto values = this->values() | std::views::take(5) | std::ranges::to<std::vector>();
+        seq = {values[0], values[1], values[2], values[3], values[4]};
+        EXPECT_TRUE(std::ranges::equal(seq, values | this->reversed_if_front()))
+            << std::format("{} != {}", seq, values | this->reversed_if_front());
     }
 }
 
@@ -422,9 +479,8 @@ TYPED_TEST(SequenceTest, emplace_native_at_capacity)
 
 TYPED_TEST(SequenceTest, clear)
 {
-    auto values = this->values() | std::views::as_rvalue;
-    TypeParam seq(std::from_range, values);
-    EXPECT_EQ(seq.size(), std::ranges::size(values));
+    TypeParam seq(std::from_range, this->values());
+    EXPECT_EQ(seq.size(), this->value_count());
 
     seq.clear();
     EXPECT_TRUE(seq.empty());
