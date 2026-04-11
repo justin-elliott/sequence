@@ -65,7 +65,7 @@ public:
 
     constexpr explicit sequence(size_type count)
     {
-        ensure_can_grow_by(count);
+        initialize_for_size(count);
         detail::exception_guard guard{&sequence::destroy_all, this};
         while (count-- != 0) {
             unchecked_emplace_native();
@@ -75,7 +75,7 @@ public:
 
     constexpr sequence(size_type count, const value_type& value)
     {
-        ensure_can_grow_by(count);
+        initialize_for_size(count);
         detail::exception_guard guard{&sequence::destroy_all, this};
         while (count-- != 0) {
             unchecked_emplace_native(value);
@@ -87,7 +87,8 @@ public:
     constexpr sequence(Iterator first, Sentinel last)
     {
         if constexpr (std::random_access_iterator<Iterator>) {
-            ensure_can_grow_by(std::distance(first, last));
+            const auto count = static_cast<size_type>(std::distance(first, last));
+            initialize_for_size(count);
         }
 
         detail::exception_guard guard{&sequence::destroy_all, this};
@@ -116,22 +117,23 @@ public:
 
     constexpr sequence(const sequence& other)
     {
-        ensure_can_grow_by(other.size());
-        if constexpr (sequence_traits::is_middle<Traits>) {
-            storage_.first(other.storage_.first());
-            storage_.last(other.storage_.first());
-        }
-        detail::exception_guard guard{&sequence::destroy_all, this};
-        if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
-            for (auto it = other.begin(); it != other.end(); ++it) {
-                unchecked_emplace_back(*it);    
+        initialize_for_size(other.size());
+
+        if constexpr (std::is_trivially_copy_constructible_v<value_type>) {
+            static_assert(false, "Not implemented");
+        } else {
+            detail::exception_guard guard{&sequence::destroy_all, this};
+            if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
+                for (auto it = other.begin(); it != other.end(); ++it) {
+                    unchecked_emplace_back(*it);    
+                }
+            } else if constexpr (sequence_traits::is_back<Traits>) {
+                for (auto it = other.rbegin(); it != other.rend(); ++it) {
+                    unchecked_emplace_front(*it);
+                }
             }
-        } else if constexpr (sequence_traits::is_back<Traits>) {
-            for (auto it = other.rbegin(); it != other.rend(); ++it) {
-                unchecked_emplace_front(*it);
-            }
+            guard.release();
         }
-        guard.release();
     }
     
     constexpr sequence(sequence&& other) noexcept
@@ -143,22 +145,23 @@ public:
         noexcept(!Traits.dynamic && !sequence_traits::is_variable<Traits>
                  && (max_size() == 0 || std::is_nothrow_move_constructible_v<value_type>))
     {
-        ensure_can_grow_by(other.size());
-        if constexpr (sequence_traits::is_middle<Traits>) {
-            storage_.first(other.storage_.first());
-            storage_.last(other.storage_.first());
-        }
-        detail::exception_guard guard{&sequence::destroy_all, this};
-        if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
-            for (auto it = other.begin(); it != other.end(); ++it) {
-                unchecked_emplace_back(std::move(*it));    
+        initialize_for_size(other.size());
+
+        if constexpr (std::is_trivially_copy_constructible_v<value_type>) {
+            static_assert(false, "Not implemented");
+        } else {
+            detail::exception_guard guard{&sequence::destroy_all, this};
+            if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
+                for (auto it = other.begin(); it != other.end(); ++it) {
+                    unchecked_emplace_back(std::move(*it));    
+                }
+            } else if constexpr (sequence_traits::is_back<Traits>) {
+                for (auto it = other.rbegin(); it != other.rend(); ++it) {
+                    unchecked_emplace_front(std::move(*it));
+                }
             }
-        } else if constexpr (sequence_traits::is_back<Traits>) {
-            for (auto it = other.rbegin(); it != other.rend(); ++it) {
-                unchecked_emplace_front(std::move(*it));
-            }
+            guard.release();
         }
-        guard.release();
     }
 
     constexpr sequence(std::initializer_list<value_type> init)
@@ -466,14 +469,25 @@ private:
 
     constexpr void destroy_all() { std::ranges::destroy(begin(), end()); }
 
-    constexpr void ensure_can_grow_by(difference_type n)
+    constexpr void ensure_can_grow_by(size_type n)
     {
-        if (static_cast<difference_type>(capacity() - size()) < n) {
+        if (static_cast<size_type>(capacity() - size()) < n) {
             if constexpr (sequence_traits::is_variable<Traits>) {
                 static_assert(false, "Not implemented");
             } else {
                 throw std::bad_alloc();
             }
+        }
+    }
+
+    constexpr void initialize_for_size(size_type n)
+    {
+        ensure_can_grow_by(n);
+    
+        if constexpr (sequence_traits::is_middle<Traits>) {
+            const auto first = static_cast<size_type>((capacity() - n) / 2);
+            storage_.first(first);
+            storage_.last(first);
         }
     }
 
