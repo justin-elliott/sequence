@@ -110,22 +110,57 @@ public:
     }
 
     constexpr sequence(const sequence& other) noexcept
-            requires (!Traits.dynamic
-                      && !sequence_traits::is_variable<Traits>
+            requires (!Traits.dynamic && !sequence_traits::is_variable<Traits>
                       && std::is_trivially_copy_constructible_v<storage_type>)
         = default;
 
-    constexpr sequence(const sequence& other);
+    constexpr sequence(const sequence& other)
+    {
+        ensure_can_grow_by(other.size());
+        if constexpr (sequence_traits::is_middle<Traits>) {
+            storage_.first(other.storage_.first());
+            storage_.last(other.storage_.first());
+        }
+        detail::exception_guard guard{&sequence::destroy_all, this};
+        if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
+            for (auto it = other.begin(); it != other.end(); ++it) {
+                unchecked_emplace_back(*it);    
+            }
+        } else if constexpr (sequence_traits::is_back<Traits>) {
+            for (auto it = other.rbegin(); it != other.rend(); ++it) {
+                unchecked_emplace_front(*it);
+            }
+        }
+        guard.release();
+    }
     
     constexpr sequence(sequence&& other) noexcept
-            requires (!Traits.dynamic
-                      && !sequence_traits::is_variable<Traits>
+            requires (!Traits.dynamic && !sequence_traits::is_variable<Traits>
                       && std::is_trivially_move_constructible_v<storage_type>)
         = default;
     
     constexpr sequence(sequence&& other)
-        noexcept(max_size() == 0 || std::is_nothrow_move_constructible_v<value_type>);
-    
+        noexcept(!Traits.dynamic && !sequence_traits::is_variable<Traits>
+                 && (max_size() == 0 || std::is_nothrow_move_constructible_v<value_type>))
+    {
+        ensure_can_grow_by(other.size());
+        if constexpr (sequence_traits::is_middle<Traits>) {
+            storage_.first(other.storage_.first());
+            storage_.last(other.storage_.first());
+        }
+        detail::exception_guard guard{&sequence::destroy_all, this};
+        if constexpr (sequence_traits::is_front<Traits> || sequence_traits::is_middle<Traits>) {
+            for (auto it = other.begin(); it != other.end(); ++it) {
+                unchecked_emplace_back(std::move(*it));    
+            }
+        } else if constexpr (sequence_traits::is_back<Traits>) {
+            for (auto it = other.rbegin(); it != other.rend(); ++it) {
+                unchecked_emplace_front(std::move(*it));
+            }
+        }
+        guard.release();
+    }
+
     constexpr sequence(std::initializer_list<value_type> init)
         : sequence(init.begin(), init.end())
     {}
@@ -154,24 +189,30 @@ public:
         return Traits.capacity;
     }
 
-    [[nodiscard]] constexpr size_type       capacity() const { return storage_.capacity(); }
+    [[nodiscard]] constexpr size_type               capacity() const { return storage_.capacity(); }
 
-    [[nodiscard]] constexpr bool            empty()    const { return storage_.last() == storage_.first(); }
-    [[nodiscard]] constexpr size_type       size()     const { return storage_.last() - storage_.first(); }
-    [[nodiscard]] constexpr pointer         data()           { return data_begin(); }
-    [[nodiscard]] constexpr const_pointer   data()     const { return data_begin(); }
+    [[nodiscard]] constexpr bool                    empty()    const { return storage_.last() == storage_.first(); }
+    [[nodiscard]] constexpr size_type               size()     const { return storage_.last() - storage_.first(); }
+    [[nodiscard]] constexpr pointer                 data()           { return data_begin(); }
+    [[nodiscard]] constexpr const_pointer           data()     const { return data_begin(); }
 
-    [[nodiscard]] constexpr iterator        begin()          { return data_begin(); }
-    [[nodiscard]] constexpr const_iterator  begin()    const { return data_begin(); }
-    [[nodiscard]] constexpr const_iterator  cbegin()   const { return data_begin(); }
-    [[nodiscard]] constexpr iterator        end()            { return data_end(); }
-    [[nodiscard]] constexpr const_iterator  end()      const { return data_end(); }
-    [[nodiscard]] constexpr const_iterator  cend()     const { return data_end(); }
+    [[nodiscard]] constexpr iterator                begin()          { return data_begin(); }
+    [[nodiscard]] constexpr const_iterator          begin()    const { return cbegin(); }
+    [[nodiscard]] constexpr const_iterator          cbegin()   const { return data_begin(); }
+    [[nodiscard]] constexpr reverse_iterator        rbegin()         { return std::make_reverse_iterator(end()); }
+    [[nodiscard]] constexpr const_reverse_iterator  rbegin()   const { return crbegin(); }
+    [[nodiscard]] constexpr const_reverse_iterator  crbegin()  const { return std::make_reverse_iterator(end()); }
+    [[nodiscard]] constexpr iterator                end()            { return data_end(); }
+    [[nodiscard]] constexpr const_iterator          end()      const { return cend(); }
+    [[nodiscard]] constexpr const_iterator          cend()     const { return data_end(); }
+    [[nodiscard]] constexpr reverse_iterator        rend()           { return std::make_reverse_iterator(begin()); }
+    [[nodiscard]] constexpr const_reverse_iterator  rend()     const { return crend(); }
+    [[nodiscard]] constexpr const_reverse_iterator  crend()    const { return std::make_reverse_iterator(begin()); }
 
-    [[nodiscard]] constexpr reference       front()          { return *data_begin(); }
-    [[nodiscard]] constexpr const_reference front()    const { return *data_begin(); }
-    [[nodiscard]] constexpr reference       back()           { return *(std::prev(data_end())); }
-    [[nodiscard]] constexpr const_reference back()     const { return *(std::prev(data_end())); }
+    [[nodiscard]] constexpr reference               front()          { return *data_begin(); }
+    [[nodiscard]] constexpr const_reference         front()    const { return *data_begin(); }
+    [[nodiscard]] constexpr reference               back()           { return *(std::prev(data_end())); }
+    [[nodiscard]] constexpr const_reference         back()     const { return *(std::prev(data_end())); }
 
     /// Prepends a new element to the front of the container.
     ///

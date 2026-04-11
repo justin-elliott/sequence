@@ -93,8 +93,8 @@ struct MoveOnly
 
     constexpr friend bool operator==(const MoveOnly&, const MoveOnly&) = default;
 
-    static inline const std::size_t error_value{static_cast<std::size_t>(-1)};
-    std::size_t value{error_value};
+    static inline const std::size_t error_value = static_cast<std::size_t>(-1);
+    std::size_t value = error_value;
 };
 
 template <>
@@ -111,6 +111,38 @@ struct std::formatter<MoveOnly>
     }
 };
 
+struct NonTrivial
+{
+    constexpr NonTrivial(std::size_t value = 0) : value{value} {}
+
+    constexpr NonTrivial(const NonTrivial& other) { value = other.value; }
+    constexpr NonTrivial(NonTrivial&& other) { value = other.value; }
+
+    constexpr NonTrivial& operator=(const NonTrivial& other) { value = other.value; return *this; }
+    constexpr NonTrivial& operator=(NonTrivial&& other) { value = other.value; return *this; }
+
+    constexpr ~NonTrivial() { value = error_value; }
+
+    constexpr friend bool operator==(const NonTrivial&, const NonTrivial&) = default;
+
+    static inline const std::size_t error_value = static_cast<std::size_t>(-1);
+    std::size_t value = error_value;
+};
+
+template <>
+struct std::formatter<NonTrivial>
+{
+    constexpr auto parse(auto&& ctx) { return ctx.begin(); }
+
+    auto format(const NonTrivial& non_trivial, auto&& ctx) const
+    {
+        if (non_trivial.value == NonTrivial::error_value) {
+            return std::format_to(ctx.out(), "(/)");
+        }
+        return std::format_to(ctx.out(), "{}", non_trivial.value);
+    }
+};
+
 using sequence_types = testing::Types<
     sequence<double, 0>,
     sequence<std::uint16_t, inplace_size>,
@@ -118,7 +150,10 @@ using sequence_types = testing::Types<
     sequence<std::uint16_t, inplace_size, location::back>,
     sequence<MoveOnly, inplace_size>,
     sequence<MoveOnly, inplace_size, location::middle>,
-    sequence<MoveOnly, inplace_size, location::back>
+    sequence<MoveOnly, inplace_size, location::back>,
+    sequence<NonTrivial, inplace_size>,
+    sequence<NonTrivial, inplace_size, location::middle>,
+    sequence<NonTrivial, inplace_size, location::back>
 >;
 TYPED_TEST_SUITE(SequenceTest, sequence_types);
 
@@ -167,8 +202,8 @@ TYPED_TEST(SequenceTest, construct_range)
 
 TYPED_TEST(SequenceTest, construct_copy)
 {
-    if constexpr (!std::is_trivially_copy_constructible_v<typename TypeParam::value_type>) {
-        GTEST_SKIP() << "Not trivially copy constructible";
+    if constexpr (!std::is_copy_constructible_v<typename TypeParam::value_type>) {
+        GTEST_SKIP() << "Not copy constructible";
     } else {
         const TypeParam seq1(std::from_range, this->values());
         const TypeParam seq2(seq1);
@@ -179,8 +214,8 @@ TYPED_TEST(SequenceTest, construct_copy)
 
 TYPED_TEST(SequenceTest, construct_move)
 {
-    if constexpr (!std::is_trivially_move_constructible_v<typename TypeParam::value_type>) {
-        GTEST_SKIP() << "Not trivially move constructible";
+    if constexpr (!std::is_move_constructible_v<typename TypeParam::value_type>) {
+        GTEST_SKIP() << "Not move constructible";
     } else {
         TypeParam seq1(std::from_range, this->values());
         const TypeParam seq2(std::move(seq1));
